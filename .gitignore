@@ -1,7 +1,9 @@
 /prboom2/ICONS/icons.aps
 /prboom2/release
 /build*
+!/build-switch.ps1
 /release*
+/.build-deps/
 
 # spec files
 analysis.txt

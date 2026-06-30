@@ -34,6 +34,10 @@
 #include "dsda/configuration.h"
 #include "textscreen/txt_main.h"
 
+#ifdef __SWITCH__
+#include <SDL.h>
+#endif
+
 #include "endoom.h"
 
 #define ENDOOM_W 80
@@ -497,6 +501,11 @@ void dsda_WindowEndoom(void)
     }
 
     // Wait for a keypress
+#ifdef __SWITCH__
+    // Flush any events queued from confirming the quit dialog so the screen
+    // is not dismissed instantly by the button press that triggered the exit.
+    SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
+#endif
 
     while (true)
     {

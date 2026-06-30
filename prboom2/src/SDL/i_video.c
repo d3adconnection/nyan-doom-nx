@@ -764,6 +764,12 @@ void I_GetScreenResolution(void)
       desired_screenheight = height;
     }
   }
+
+#ifdef __SWITCH__
+  // Switch native panel is 1280x720; force it so the picture is 16:9 widescreen.
+  desired_screenwidth = 1280;
+  desired_screenheight = 720;
+#endif
 }
 
 // make sure the canonical resolutions are always available
@@ -1027,6 +1033,11 @@ static video_mode_t I_DesiredVideoMode(void) {
   dsda_arg_t *arg;
   video_mode_t mode;
 
+#ifdef __SWITCH__
+  // libnx GL is limited; the Switch port always uses the SDL software renderer.
+  return VID_MODESW;
+#endif
+
   arg = dsda_Arg(dsda_arg_vidmode);
   if (arg->found)
     mode = I_GetModeFromString(arg->value.v_string);
@@ -1050,6 +1061,11 @@ void I_InitScreenResolution(void)
   I_GetScreenResolution();
 
   desired_fullscreen = dsda_IntConfig(dsda_config_use_fullscreen);
+
+#ifdef __SWITCH__
+  // Switch has a fixed handheld/docked display: always fullscreen.
+  desired_fullscreen = 1;
+#endif
 
   if (init)
   {

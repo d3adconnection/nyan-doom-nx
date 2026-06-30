@@ -1,7 +1,8 @@
 <div align="center" markdown="1">
     <a href="https://github.com/andrikpowell/nyan-doom/"><img src="./prboom2/ICONS/nyan-doom.svg" alt="Nyan Doom Logo" width="200"/></a>
-    <h1>Nyan Doom</h1>
-    <h3>The most fuzzy, cuddly Doom port ever!</h3>
+    <h1>Nyan Doom NX</h1>
+    <h3>A Nintendo Switch port of the most fuzzy, cuddly Doom port ever!</h3>
+    <h4><i>Disclaimer: This is a personal fork of Nyan Doom. Claude Opus 4.8 & Sonnet 4.6 were used in the process of porting. I do not claim to be a good or even decent programmer, and I take no credit for this.</i></h4>
 </div>
 
 <div align="center" markdown="1">

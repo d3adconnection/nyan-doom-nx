@@ -2503,6 +2503,16 @@ static dboolean M_ItemDisabled(const setup_menu_t* s)
   if (M_DoomDisabled(s))
     return true;
 
+#ifdef __SWITCH__
+  // Switch has a fixed 1280x720 display and no desktop GL.
+  // Grey out the video settings that are forced at runtime.
+  if (s->config_id == dsda_config_videomode          ||
+      s->config_id == dsda_config_screen_resolution  ||
+      s->config_id == dsda_config_use_fullscreen     ||
+      s->config_id == dsda_config_exclusive_fullscreen)
+    return true;
+#endif
+
   return false;
 }
 

@@ -1067,7 +1067,11 @@ char music_player_order[NUM_MUS_PLAYERS][200] =
 };
 
 const char *midiplayers[midi_player_last + 1] = {
+#ifdef __SWITCH__
+  "fluidsynth", "opl", NULL }; // portmidi not available on Switch
+#else
   "fluidsynth", "opl", "portmidi", NULL };
+#endif
 
 static int current_player = -1;
 static const void *music_handle = NULL;
@@ -1502,12 +1506,14 @@ void M_ChangeMIDIPlayer(void)
     strcpy(music_player_order[4], PLAYER_FLUIDSYNTH);
     strcpy(music_player_order[5], PLAYER_PORTMIDI);
   }
+#ifndef __SWITCH__
   else if (!strcasecmp(snd_midiplayer, midiplayers[midi_player_portmidi]))
   {
     strcpy(music_player_order[3], PLAYER_PORTMIDI);
     strcpy(music_player_order[4], PLAYER_FLUIDSYNTH);
     strcpy(music_player_order[5], PLAYER_OPL);
   }
+#endif
 
   S_StopMusic();
   S_RestartMusic();

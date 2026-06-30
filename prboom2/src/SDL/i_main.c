@@ -84,6 +84,10 @@
 #include "dsda/wad_stats.h"
 #include "dsda/zipfile.h"
 
+#ifdef __SWITCH__
+#include "i_switch.h"
+#endif
+
 /* Most of the following has been rewritten by Lee Killough
  *
  * killough 4/13/98: Make clock rate adjustable by scale factor
@@ -266,6 +270,10 @@ void I_SetProcessPriority(void)
 //int main(int argc, const char * const * argv)
 int main(int argc, char **argv)
 {
+#ifdef __SWITCH__
+  I_SwitchInit();
+#endif
+
   dsda_ParseCommandLineArgs(argc, argv);
 
   if (dsda_Flag(dsda_arg_verbose))
@@ -294,6 +302,11 @@ int main(int argc, char **argv)
   M_LoadDefaults();              // load before initing other systems
   lprintf(LO_DEBUG, "\n");
 
+#ifdef __SWITCH__
+  // Auto-detect soundfont.sf2 and configure FluidSynth if not already set.
+  I_SwitchApplyAudioDefaults();
+#endif
+
   /* Version info */
   PrintVer();
 
@@ -315,6 +328,9 @@ int main(int argc, char **argv)
 
   I_AtExit(I_EssentialQuit, true, "I_EssentialQuit", exit_priority_first);
   I_AtExit(I_Quit, false, "I_Quit", exit_priority_last);
+#ifdef __SWITCH__
+  I_AtExit(I_SwitchShutdown, true, "I_SwitchShutdown", exit_priority_last);
+#endif
 #ifndef PRBOOM_DEBUG
   if (!dsda_Flag(dsda_arg_sigsegv))
   {

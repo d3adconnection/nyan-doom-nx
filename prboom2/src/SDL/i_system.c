@@ -308,6 +308,28 @@ const char* I_GetTempDir(void)
   return "PROGDIR:";
 }
 
+#elif defined(__SWITCH__)
+
+#include "SDL/i_switch.h"
+
+static const char *I_GetXDGDataHome(void) { return SWITCH_DATA_DIR; }
+static const char *I_GetXDGDataDirs(void) { return SWITCH_DATA_DIR; }
+
+const char *I_ConfigDir(void)
+{
+  return SWITCH_DATA_DIR;
+}
+
+const char *I_ExeDir(void)
+{
+  return SWITCH_DATA_DIR;
+}
+
+const char* I_GetTempDir(void)
+{
+  return SWITCH_DATA_DIR "/tmp";
+}
+
 #else /* not Windows, not Amiga */
 
 static const char *I_GetHomeDir(void)

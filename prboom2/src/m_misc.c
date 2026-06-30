@@ -593,7 +593,11 @@ cfg_input_def_t input_defs[] = {
   INPUT_SETTING("input_strafe", dsda_input_strafe, 0, 1, DSDA_CONTROLLER_BUTTON_LEFTSHOULDER),
   INPUT_SETTING("input_autorun", dsda_input_autorun, KEYD_CAPSLOCK, -1, DSDA_CONTROLLER_BUTTON_LEFTSTICK),
   INPUT_SETTING("input_reverse", dsda_input_reverse, '/', -1, DSDA_CONTROLLER_BUTTON_RIGHTSTICK),
+#ifdef __SWITCH__
+  INPUT_SETTING("input_use", dsda_input_use, ' ', -1, DSDA_CONTROLLER_BUTTON_B),
+#else
   INPUT_SETTING("input_use", dsda_input_use, ' ', -1, DSDA_CONTROLLER_BUTTON_A),
+#endif
   INPUT_SETTING("input_flyup", dsda_input_flyup, '.', -1, DSDA_CONTROLLER_BUTTON_DPAD_UP),
   INPUT_SETTING("input_flydown", dsda_input_flydown, ',', -1, DSDA_CONTROLLER_BUTTON_DPAD_DOWN),
   INPUT_SETTING("input_flycenter", dsda_input_flycenter, 0, -1, -1),
@@ -669,8 +673,15 @@ cfg_input_def_t input_defs[] = {
   INPUT_SETTING("input_menu_up", dsda_input_menu_up, KEYD_UPARROW, -1, DSDA_CONTROLLER_BUTTON_DPAD_UP),
   INPUT_SETTING("input_menu_left", dsda_input_menu_left, KEYD_LEFTARROW, -1, DSDA_CONTROLLER_BUTTON_DPAD_LEFT),
   INPUT_SETTING("input_menu_right", dsda_input_menu_right, KEYD_RIGHTARROW, -1, DSDA_CONTROLLER_BUTTON_DPAD_RIGHT),
+  // On Switch, SDL uses Xbox positional layout: physical A (east) = SDL_BUTTON_B,
+  // physical B (south) = SDL_BUTTON_A. Swap defaults so physical A=confirm, B=back.
+#ifdef __SWITCH__
+  INPUT_SETTING("input_menu_backspace", dsda_input_menu_backspace, KEYD_BACKSPACE, -1, DSDA_CONTROLLER_BUTTON_A),
+  INPUT_SETTING("input_menu_enter", dsda_input_menu_enter, KEYD_ENTER, -1, DSDA_CONTROLLER_BUTTON_B),
+#else
   INPUT_SETTING("input_menu_backspace", dsda_input_menu_backspace, KEYD_BACKSPACE, -1, DSDA_CONTROLLER_BUTTON_B),
   INPUT_SETTING("input_menu_enter", dsda_input_menu_enter, KEYD_ENTER, -1, DSDA_CONTROLLER_BUTTON_A),
+#endif
   INPUT_SETTING("input_menu_escape", dsda_input_menu_escape, KEYD_ESCAPE, -1, DSDA_CONTROLLER_BUTTON_START),
   INPUT_SETTING("input_menu_clear", dsda_input_menu_clear, KEYD_DEL, -1, DSDA_CONTROLLER_BUTTON_BACK),
 
@@ -764,7 +775,11 @@ cfg_input_def_t input_defs[] = {
   INPUT_SETTING("input_build_weapon8", dsda_input_build_weapon8, '8', -1, -1),
   INPUT_SETTING("input_build_weapon9", dsda_input_build_weapon9, '9', -1, -1),
 
+#ifdef __SWITCH__
+  INPUT_SETTING("input_jump", dsda_input_jump, KEYD_RALT, -1, DSDA_CONTROLLER_BUTTON_A),
+#else
   INPUT_SETTING("input_jump", dsda_input_jump, KEYD_RALT, -1, DSDA_CONTROLLER_BUTTON_B),
+#endif
   INPUT_SETTING("input_hexen_arti_incant", dsda_input_hexen_arti_incant, 0, -1, -1),
   INPUT_SETTING("input_hexen_arti_summon", dsda_input_hexen_arti_summon, 0, -1, -1),
   INPUT_SETTING("input_hexen_arti_disk", dsda_input_hexen_arti_disk, 0, -1, -1),

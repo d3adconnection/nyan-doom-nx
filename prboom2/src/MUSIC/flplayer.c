@@ -66,7 +66,22 @@ const music_player_t fl_player =
 
 #else // HAVE_LIBFLUIDSYNTH
 
+#ifdef __SWITCH__
+#include <fluidlite.h>  // FluidLite: glib-free SF2 renderer, API-compatible with FluidSynth 1.x
+// FluidLite uses plain int return codes; define the FluidSynth 1.x macros it omits.
+#ifndef FLUID_OK
+#define FLUID_OK   (0)
+#define FLUID_FAILED (-1)
+#endif
+// Map FluidLite version to the FLUIDSYNTH_VERSION_MAJOR name the code uses.
+#ifndef FLUIDSYNTH_VERSION_MAJOR
+#define FLUIDSYNTH_VERSION_MAJOR FLUIDLITE_VERSION_MAJOR
+#define FLUIDSYNTH_VERSION_MINOR FLUIDLITE_VERSION_MINOR
+#define FLUIDSYNTH_VERSION_MICRO FLUIDLITE_VERSION_MICRO
+#endif
+#else
 #include <fluidsynth.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include "i_system.h" // for I_FindFile()
@@ -78,6 +93,11 @@ const music_player_t fl_player =
 #include "dsda/args.h"
 #include "dsda/configuration.h"
 
+#ifdef __SWITCH__
+#include "SDL/i_switch.h" // for SWITCH_DATA_DIR
+#endif
+
+// FluidLite reports FLUIDSYNTH_VERSION_MAJOR 1 and doesn't define fluid_long_long_t.
 #if (FLUIDSYNTH_VERSION_MAJOR < 2 || (FLUIDSYNTH_VERSION_MAJOR == 2 && FLUIDSYNTH_VERSION_MINOR < 2))
   typedef int fl_sfread_count_t;
   typedef long fl_sfseek_offset_t;
@@ -172,10 +192,12 @@ static int fl_init (int samplerate)
   int mus_fluidsynth_reverb_level;
   int mus_fluidsynth_reverb_width;
   int mus_fluidsynth_reverb_room_size;
+#ifndef __SWITCH__
   const char *filename;
+#endif
 
   if (!dsda_Flag(dsda_arg_verbose) || dsda_Flag(dsda_arg_quiet))
-    fluid_set_log_function(FLUID_WARN, fl_null_logger, NULL);
+    fluid_set_log_function(FLUID_WARN, (fluid_log_function_t)fl_null_logger, NULL);
 
   mus_fluidsynth_chorus = dsda_IntConfig(dsda_config_mus_fluidsynth_chorus);
   mus_fluidsynth_reverb = dsda_IntConfig(dsda_config_mus_fluidsynth_reverb);
@@ -192,6 +214,11 @@ static int fl_init (int samplerate)
   // since the versions are ABI compatible, detect at runtime, not compile time
   {
     int sratemin;
+#ifdef __SWITCH__
+    // FluidLite does not export fluid_version(); it behaves like FluidSynth >= 1.1.4.
+    lprintf(LO_DEBUG, "Fluidplayer: using FluidLite SF2 renderer\n");
+    sratemin = 8000;
+#else
     int major;
     int minor;
     int micro;
@@ -201,6 +228,7 @@ static int fl_init (int samplerate)
       sratemin = 8000;
     else
       sratemin = 22050;
+#endif
     if (f_soundrate < sratemin)
     {
       lprintf (LO_WARN, "Fluidplayer: samplerates under %i are not supported\n", sratemin);
@@ -262,6 +290,7 @@ static int fl_init (int samplerate)
   {
     lprintf (LO_WARN, "fl_init: error creating fluidsynth object\n");
     delete_fluid_settings (f_set);
+    f_set = NULL;
     return 0;
   }
 
@@ -285,12 +314,42 @@ static int fl_init (int samplerate)
     {
       checked_file = true;
       checked_f_font = snd_soundfont;
+#ifdef __SWITCH__
+      // On Switch, snd_soundfont is always an absolute sdmc:/ path.
+      // Bypass I_FindFile2 (desktop search) and test+load directly.
+      {
+        FILE *test_f = fopen(snd_soundfont, "rb");
+        if (test_f) {
+          fclose(test_f);
+          f_font = fluid_synth_sfload(f_syn, snd_soundfont, 1);
+        } else {
+          lprintf(LO_WARN, "fl_init: cannot open soundfont: %s\n", snd_soundfont);
+          f_font = FLUID_FAILED;
+        }
+      }
+#else
       filename = I_FindFile2(snd_soundfont, ".sf2");
-      f_font = fluid_synth_sfload (f_syn, filename, 1);
+      if (!filename)
+      {
+        lprintf(LO_WARN, "fl_init: soundfont not found: %s\n", snd_soundfont);
+        delete_fluid_synth(f_syn);
+        delete_fluid_settings(f_set);
+        f_syn = NULL;
+        f_set = NULL;
+        return 0;
+      }
+      f_font = fluid_synth_sfload(f_syn, filename, 1);
+#endif
     }
 
     if ((!checked_file || f_font == FLUID_FAILED) && lumpnum >= 0)
     {
+#ifdef __SWITCH__
+      // FluidLite does not support the fluid_sfloader custom-callback API.
+      // On Switch the user provides a file via snd_soundfont; SNDFONT lumps are not supported.
+      lprintf(LO_WARN, "fl_init: SNDFONT lump not supported on Switch; place soundfont.sf2 in %s\n",
+              SWITCH_DATA_DIR);
+#else
       fluid_sfloader_t *sfloader;
 
       checked_f_font = "SNDFONT";
@@ -299,6 +358,7 @@ static int fl_init (int samplerate)
                                    fl_sftell, fl_sfclose);
       fluid_synth_add_sfloader(f_syn, sfloader);
       f_font = fluid_synth_sfload(f_syn, "SNDFONT", 1);
+#endif
     }
 
     if (!checked_f_font)
@@ -306,6 +366,8 @@ static int fl_init (int samplerate)
       lprintf(LO_WARN, "fl_init: no soundfont detected!\n");
       delete_fluid_synth (f_syn);
       delete_fluid_settings (f_set);
+      f_syn = NULL;
+      f_set = NULL;
       return 0;
     }
 
@@ -314,6 +376,8 @@ static int fl_init (int samplerate)
       lprintf (LO_WARN, "fl_init: error loading soundfont %s\n", checked_f_font);
       delete_fluid_synth (f_syn);
       delete_fluid_settings (f_set);
+      f_syn = NULL;
+      f_set = NULL;
       return 0;
     }
   }

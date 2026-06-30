@@ -13,8 +13,13 @@ if(APPLE)
   set(CMAKE_FIND_FRAMEWORK ONLY)
 endif()
 
-set(OpenGL_GL_PREFERENCE LEGACY)
-find_package(OpenGL 2.0 REQUIRED)
+# Nintendo Switch (libnx) ships only a limited OpenGL stack; the port targets the
+# SDL_Renderer software path, so desktop GL is not required there.
+if(NOT NINTENDO_SWITCH)
+  set(OpenGL_GL_PREFERENCE LEGACY)
+  find_package(OpenGL 2.0 REQUIRED)
+  set(HAVE_OPENGL TRUE)
+endif()
 
 if(APPLE)
   set(CMAKE_FIND_FRAMEWORK ${find_framework_backup})
@@ -50,9 +55,25 @@ if(WITH_MAD)
 endif()
 
 if(WITH_FLUIDSYNTH)
-  find_package(FluidSynth ${nyan_strict_keyword})
-  if(FluidSynth_FOUND)
-    set(HAVE_LIBFLUIDSYNTH TRUE)
+  if(NINTENDO_SWITCH)
+    # Use FluidLite: a glib-free drop-in for FluidSynth, cross-compiled into portlibs.
+    set(_portlibs "$ENV{DEVKITPRO}/portlibs/switch")
+    find_library(FluidLite_LIBRARY NAMES fluidlite HINTS "${_portlibs}/lib" NO_DEFAULT_PATH)
+    if(FluidLite_LIBRARY)
+      set(HAVE_LIBFLUIDSYNTH TRUE)
+      add_library(FluidSynth::libfluidsynth STATIC IMPORTED)
+      set_target_properties(FluidSynth::libfluidsynth PROPERTIES
+        IMPORTED_LOCATION "${FluidLite_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${_portlibs}/include")
+      message(STATUS "FluidLite found: ${FluidLite_LIBRARY}")
+    else()
+      message(STATUS "FluidLite not found in ${_portlibs}/lib -- run .build-deps/build_portlibs.sh first")
+    endif()
+  else()
+    find_package(FluidSynth ${nyan_strict_keyword})
+    if(FluidSynth_FOUND)
+      set(HAVE_LIBFLUIDSYNTH TRUE)
+    endif()
   endif()
 endif()
 
@@ -70,7 +91,7 @@ if(WITH_VORBISFILE)
   endif()
 endif()
 
-if(WITH_PORTMIDI)
+if(WITH_PORTMIDI AND NOT NINTENDO_SWITCH)
   find_package(PortMidi ${nyan_strict_keyword})
   if(PortMidi_FOUND)
     set(HAVE_LIBPORTMIDI TRUE)
@@ -121,8 +142,8 @@ endif()
 
 target_link_libraries(nyan_dependencies
   INTERFACE
-  OpenGL::GL
-  OpenGL::GLU
+  $<$<BOOL:${HAVE_OPENGL}>:OpenGL::GL>
+  $<$<BOOL:${HAVE_OPENGL}>:OpenGL::GLU>
   SndFile::sndfile
   libzip::zip
   ZLIB::ZLIB

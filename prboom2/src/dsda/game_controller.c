@@ -44,11 +44,20 @@ static axis_t right_trigger = { SDL_CONTROLLER_AXIS_TRIGGERRIGHT };
 
 static int swap_analogs;
 
+// On Switch, SDL uses Xbox positional layout: physical A (east)=SDL B, physical B (south)=SDL A,
+// physical X (north)=SDL Y, physical Y (west)=SDL X. Swap display labels to match Joy-Con markings.
 static const char* button_names[] = {
+#ifdef __SWITCH__
+  [DSDA_CONTROLLER_BUTTON_A] = "pad b",   // SDL south = physical B
+  [DSDA_CONTROLLER_BUTTON_B] = "pad a",   // SDL east  = physical A
+  [DSDA_CONTROLLER_BUTTON_X] = "pad y",   // SDL west  = physical Y
+  [DSDA_CONTROLLER_BUTTON_Y] = "pad x",   // SDL north = physical X
+#else
   [DSDA_CONTROLLER_BUTTON_A] = "pad a",
   [DSDA_CONTROLLER_BUTTON_B] = "pad b",
   [DSDA_CONTROLLER_BUTTON_X] = "pad x",
   [DSDA_CONTROLLER_BUTTON_Y] = "pad y",
+#endif
   [DSDA_CONTROLLER_BUTTON_BACK] = "pad back",
   [DSDA_CONTROLLER_BUTTON_GUIDE] = "pad guide",
   [DSDA_CONTROLLER_BUTTON_START] = "pad start",
@@ -196,6 +205,12 @@ void dsda_InitGameController(void) {
   game_controller = NULL;
   use_game_controller =
     dsda_IntConfig(dsda_config_use_game_controller) && !dsda_Flag(dsda_arg_nojoy);
+
+#ifdef __SWITCH__
+  // No keyboard/mouse on Switch: always use the first controller unless disabled.
+  if (!dsda_Flag(dsda_arg_nojoy))
+    use_game_controller = 1;
+#endif
 
   if (!use_game_controller)
     return;

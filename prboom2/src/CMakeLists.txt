@@ -552,6 +552,13 @@ set(SDLDOOM_SOURCES
     SDL/i_video.c
 )
 
+if(NINTENDO_SWITCH)
+    list(APPEND SDLDOOM_SOURCES
+        SDL/i_switch.c
+        SDL/i_switch.h
+    )
+endif()
+
 set(DOOMMUSIC_SOURCES
     MUSIC/xmpplayer.c
     MUSIC/xmpplayer.h
@@ -593,6 +600,7 @@ set(NYAN_SOURCES
 )
 
 function(AddGameExecutable TARGET SOURCES)
+    if(NOT NINTENDO_SWITCH)
     set(SOURCES
         ${SOURCES}
         gl_clipper.c
@@ -614,6 +622,11 @@ function(AddGameExecutable TARGET SOURCES)
         gl_vertex.c
         gl_wipe.c
     )
+    endif()
+
+    if(NINTENDO_SWITCH)
+        set(SOURCES ${SOURCES} gl_stub.c)
+    endif()
 
     if(WIN32)
         set(SOURCES
@@ -690,6 +703,21 @@ function(AddGameExecutable TARGET SOURCES)
         )
     else()
         install(TARGETS ${TARGET} RUNTIME DESTINATION "${NYAN_INSTALL_BINDIR}")
+    endif()
+
+    if(NINTENDO_SWITCH)
+        target_link_libraries(${TARGET} PRIVATE nx)
+        target_compile_definitions(${TARGET} PRIVATE __SWITCH__)
+        set_target_properties(${TARGET} PROPERTIES SUFFIX ".elf")
+        # Generate a Switch homebrew .nro alongside the .elf
+        find_program(NACPTOOL nacptool PATHS "$ENV{DEVKITPRO}/tools/bin")
+        find_program(ELF2NRO elf2nro PATHS "$ENV{DEVKITPRO}/tools/bin")
+        add_custom_command(TARGET ${TARGET} POST_BUILD
+            COMMAND ${NACPTOOL} --create "Nyan Doom" "nyan-doom" "${PROJECT_VERSION}" ${TARGET}.nacp
+            COMMAND ${ELF2NRO} $<TARGET_FILE:${TARGET}> ${TARGET}.nro --nacp=${TARGET}.nacp --icon=${CMAKE_CURRENT_SOURCE_DIR}/../ICONS/nyan-doom-256.jpg
+            WORKING_DIRECTORY ${NYAN_OUTPUT_PATH}
+            COMMENT "Packaging ${TARGET}.nro"
+        )
     endif()
 endfunction()
 

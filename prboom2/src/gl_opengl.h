@@ -41,7 +41,10 @@
 #include <SDL.h>
 #include <SDL_opengl.h>
 
-#if SDL_VERSION_ATLEAST(1, 3, 0)
+#if defined(__SWITCH__)
+/* Switch (libnx) provides only GLES headers via SDL; the GL renderer is
+ * disabled and only GL types are needed for declarations. */
+#elif SDL_VERSION_ATLEAST(1, 3, 0)
 #if defined(__MACOSX__)
 #include <OpenGL/gl.h>	/* Header File For The OpenGL Library */
 #include <OpenGL/glu.h>	/* Header File For The GLU Library */
