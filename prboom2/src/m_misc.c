@@ -593,6 +593,7 @@ cfg_input_def_t input_defs[] = {
   INPUT_SETTING("input_strafe", dsda_input_strafe, 0, 1, DSDA_CONTROLLER_BUTTON_LEFTSHOULDER),
   INPUT_SETTING("input_autorun", dsda_input_autorun, KEYD_CAPSLOCK, -1, DSDA_CONTROLLER_BUTTON_LEFTSTICK),
   INPUT_SETTING("input_reverse", dsda_input_reverse, '/', -1, DSDA_CONTROLLER_BUTTON_RIGHTSTICK),
+  // On Switch, SDL uses Xbox positional layout: BUTTON_B = east = physical A.
 #ifdef __SWITCH__
   INPUT_SETTING("input_use", dsda_input_use, ' ', -1, DSDA_CONTROLLER_BUTTON_B),
 #else
@@ -775,6 +776,7 @@ cfg_input_def_t input_defs[] = {
   INPUT_SETTING("input_build_weapon8", dsda_input_build_weapon8, '8', -1, -1),
   INPUT_SETTING("input_build_weapon9", dsda_input_build_weapon9, '9', -1, -1),
 
+  // On Switch, SDL uses Xbox positional layout: BUTTON_A = south = physical B.
 #ifdef __SWITCH__
   INPUT_SETTING("input_jump", dsda_input_jump, KEYD_RALT, -1, DSDA_CONTROLLER_BUTTON_A),
 #else
@@ -953,7 +955,9 @@ void M_LoadDefaults (void)
       if (!cfgline)
         break;
 
-      if (sscanf (cfgline, "%79s %[^\n]\n", def, strparm) == 2)
+      // %[^\r\n] stops at either CR or LF so config files with CRLF line
+      // endings (e.g. created on Windows) are parsed correctly on all platforms.
+      if (sscanf (cfgline, "%79s %[^\r\n]", def, strparm) == 2)
       {
         newstring = NULL;
 

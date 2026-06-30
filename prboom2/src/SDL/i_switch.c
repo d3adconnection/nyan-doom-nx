@@ -3,9 +3,9 @@
  *
  *  Nyan Doom - Nintendo Switch (libnx) platform glue.
  *
- *  Implements Switch-specific startup/shutdown: romfs (for the bundled
- *  soundfont), sockets, and forcing the working directory onto the SD card so
- *  that config files, savegames and WADs land in SWITCH_DATA_DIR.
+ *  Implements Switch-specific startup/shutdown: sockets and working-directory
+ *  setup so that config files, savegames and WADs land in SWITCH_DATA_DIR.
+ *  Soundfonts are auto-detected from the SD card at first launch.
  *
  *-----------------------------------------------------------------------------
  */

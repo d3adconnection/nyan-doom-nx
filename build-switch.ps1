@@ -1,7 +1,12 @@
 ﻿# build-switch.ps1
-# Full clean rebuild of Nyan Doom NX for Nintendo Switch.
-# Usage:  .\build-switch.ps1
+# Build Nyan Doom NX for Nintendo Switch.
+# Usage:  .\build-switch.ps1           # incremental (default)
+#         .\build-switch.ps1 -Clean    # full clean rebuild
 # Output: build-switch\nyan-doom.nro
+
+param(
+    [switch]$Clean = $false
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -17,9 +22,11 @@ Write-Host "Repo: $WIN_REPO"
 Write-Host ""
 
 $buildDir = $WIN_REPO + "\build-switch"
-if (Test-Path $buildDir) {
+if ($Clean -and (Test-Path $buildDir)) {
     Write-Host "[1/3] Cleaning build-switch/ ..." -ForegroundColor Yellow
     Remove-Item -Recurse -Force $buildDir
+} elseif (-not $Clean) {
+    Write-Host "[1/3] Skipping clean (incremental build) ..." -ForegroundColor DarkGray
 }
 
 Write-Host "[2/3] Configuring ..." -ForegroundColor Yellow

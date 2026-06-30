@@ -13,7 +13,7 @@ CMake toolchain file for devkitA64 cross-compilation. Includes `$DEVKITPRO/cmake
 All Switch platform glue, called from `i_main.c`:
 - `I_SwitchInit()` — initialises BSD sockets (nxlink debug), creates `sdmc:/switch/nyan-doom/` and `chdir`s into it so all relative paths (config, saves, WADs) land on the SD card.
 - `I_SwitchShutdown()` — tears down sockets.
-- `I_SwitchApplyAudioDefaults()` — called after `M_LoadDefaults()`; boosts the FluidSynth gain default from 50 → 100 (synth.gain 0.5 → 1.0) on first run; scans the data directory for the first `.sf2` soundfont and writes its path into `snd_soundfont` if not already configured; sets `snd_midiplayer` to `"fluidsynth"` if not already configured.
+- `I_SwitchApplyAudioDefaults()` — called after `M_LoadDefaults()`; boosts the FluidSynth gain default from 50 → 100 (synth.gain 0.5 → 1.0) on first run; scans the data directory for the first `.sf2` soundfont and writes its path into `snd_soundfont` if not already configured; if a soundfont was auto-detected and `snd_midiplayer` is not already configured, also sets it to `"fluidsynth"`.
 
 ### `prboom2/src/gl_stub.c`
 Stub implementations of every OpenGL fixed-function and `gld_*` call. The Switch only has GLES/EGL — no desktop GL — so the GL renderer is compiled out entirely and these stubs satisfy the linker.
@@ -22,7 +22,7 @@ Stub implementations of every OpenGL fixed-function and `gld_*` call. The Switch
 256×256 JPEG icon embedded in the `.nro` by `elf2nro`, displayed by Switch homebrew launchers (e.g. Sphaira).
 
 ### `build-switch.ps1`
-PowerShell 5.1 build script at the repo root. Cleans `build-switch/`, runs CMake configuration with the Switch toolchain, and invokes Ninja to produce `build-switch/src/nyan-doom.nro`. Hardcodes devkitPro and repository paths for Windows.
+PowerShell 5.1 build script at the repo root. Supports incremental builds by default (`-Clean` flag required for a full wipe). Runs CMake configuration with the Switch toolchain and invokes Ninja to produce `build-switch/src/nyan-doom.nro`. Hardcodes devkitPro and repository paths for Windows.
 
 ---
 
@@ -60,6 +60,19 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
 ### `prboom2/src/SDL/i_video.c`
 - Forces `desired_screenwidth = 1280`, `desired_screenheight = 720`, fullscreen, and the software renderer on Switch (no desktop GL available). These are applied after the config is read so they override any saved values.
 
+### `prboom2/src/m_misc.c`
+- **Config parser:** `sscanf` format in `M_LoadDefaults()` changed from `%[^\n]` to `%[^\r\n]`. On Switch and other platforms where `fopen` does not strip `\r`, a CRLF config file causes `strparm` to capture a trailing `\r`. The existing `strparm[len-1] = 0` then removes `\r` instead of the closing `"`, so the stored string is `fluidsynth"` instead of `fluidsynth`. Stopping at `\r` or `\n` fixes this.
+- **Input defaults (`#ifdef __SWITCH__` guarded):** Default controller button bindings adjusted for Switch conventions so PC/Xbox gamepad defaults are unchanged:
+
+  | Action | Old default | New default | Physical button |
+  |---|---|---|---|
+  | `input_menu_enter` | `BUTTON_A` | `BUTTON_B` | A (right) — Nintendo confirm |
+  | `input_menu_backspace` | `BUTTON_B` | `BUTTON_A` | B (bottom) — Nintendo cancel |
+  | `input_use` | `BUTTON_A` | `BUTTON_B` | A (right) |
+  | `input_jump` | `BUTTON_B` | `BUTTON_A` | B (bottom) |
+
+  `input_nextweapon` (`BUTTON_Y` → physical X) and `input_prevweapon` (`BUTTON_X` → physical Y) were already routed to the correct physical buttons; only their display labels required the fix in `game_controller.c`.
+
 ### `prboom2/src/m_menu.c`
 - `M_ItemDisabled()`: returns `true` on Switch for the four video settings that are forced at runtime — Video mode, Screen Resolution, Fullscreen Video mode, and Exclusive Fullscreen — so they are greyed out and non-interactive in the settings menu.
 
@@ -83,18 +96,6 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
 
 ### `prboom2/src/gl_opengl.h`
 - Guards the `#include <GL/glu.h>` line behind `!defined(__SWITCH__)`.
-
-### `prboom2/src/m_misc.c`
-Default controller button bindings adjusted for Switch conventions, guarded with `#ifdef __SWITCH__` so PC/Xbox gamepad defaults are unchanged:
-
-| Action | Old default | New default | Physical button |
-|---|---|---|---|
-| `input_menu_enter` | `BUTTON_A` | `BUTTON_B` | A (right) — Nintendo confirm |
-| `input_menu_backspace` | `BUTTON_B` | `BUTTON_A` | B (bottom) — Nintendo cancel |
-| `input_use` | `BUTTON_A` | `BUTTON_B` | A (right) |
-| `input_jump` | `BUTTON_B` | `BUTTON_A` | B (bottom) |
-
-`input_nextweapon` (`BUTTON_Y` → physical X) and `input_prevweapon` (`BUTTON_X` → physical Y) were already routed to the correct physical buttons; only their display labels required the fix in `game_controller.c`.
 
 ### `prboom2/src/textscreen/txt_sdl.c`
 - In `TXT_GetChar()`, `SDL_CONTROLLERBUTTONDOWN` and `SDL_JOYBUTTONDOWN` events return `1` on Switch. This covers all textscreen UI — the ENDOOM screen, setup/configuration menus, and confirmation dialogs — none of which can receive keyboard input on Switch (no physical keyboard).

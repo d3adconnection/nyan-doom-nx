@@ -1034,7 +1034,7 @@ static video_mode_t I_DesiredVideoMode(void) {
   video_mode_t mode;
 
 #ifdef __SWITCH__
-  // libnx GL is limited; the Switch port always uses the SDL software renderer.
+  // switch-sdl2 has no desktop GL (GLES/EGL only); always use the SDL software renderer.
   return VID_MODESW;
 #endif
 

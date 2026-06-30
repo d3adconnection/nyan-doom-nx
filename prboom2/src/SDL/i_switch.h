@@ -16,7 +16,7 @@
 // Base writable directory on the SD card for config, saves and WADs.
 #define SWITCH_DATA_DIR "sdmc:/switch/nyan-doom"
 
-// Initialise libnx subsystems (romfs, sockets, working dir). Call early in main.
+// Initialise libnx subsystems (sockets, working dir). Call early in main.
 void I_SwitchInit(void);
 
 // Tear down libnx subsystems. Registered as an exit handler.
