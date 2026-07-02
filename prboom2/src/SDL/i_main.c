@@ -303,8 +303,8 @@ int main(int argc, char **argv)
   lprintf(LO_DEBUG, "\n");
 
 #ifdef __SWITCH__
-  // If snd_soundfont is blank and a .sf2 is present in the data directory,
-  // configure it automatically so the user only needs to drop the file in.
+  // Clears stale snd_soundfont paths, auto-detects a .sf2 in the data
+  // directory, and ensures snd_midiplayer is not blank.
   if (I_SwitchDetectSoundfont())
     M_SaveDefaults();
 #endif

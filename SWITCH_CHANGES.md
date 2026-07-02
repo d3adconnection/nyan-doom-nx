@@ -15,7 +15,8 @@ All Switch platform glue, called from `i_main.c`:
 - `I_SwitchShutdown()` — tears down sockets.
 - `I_SwitchDetectSoundfont()` — called after `M_LoadDefaults()`; manages soundfont auto-configuration on every launch:
   - If `snd_soundfont` is set but the file no longer exists, clears it (allows a replacement to be picked up).
-  - If `snd_soundfont` is blank and a `.sf2` file is present in the data directory, sets `snd_soundfont` to its path and, if `snd_midiplayer` is also blank, sets it to `"fluidsynth"`.
+  - If `snd_soundfont` is blank and a `.sf2` file is present in the data directory, sets `snd_soundfont` to its path and, if `snd_midiplayer` is blank, sets it to `"fluidsynth"`.
+  - If `snd_midiplayer` is blank and no soundfont found, sets it to `"opl"`.
   - Returns `1` if the config was changed (caller saves); `0` if nothing was done.
 - `I_SwitchGetNumericInput(current_value, buf, buf_size)` — opens the system numpad (`SwkbdType_NumPad`) prefilled with the current integer value. Returns 1 on confirm (result in `buf`), 0 on cancel or failure. Wraps the call in `appletLockExit`/`appletUnlockExit` and flushes SDL events on return.
 - `I_SwitchGetStringInput(current, buf, buf_size)` — same but opens the full QWERTY keyboard (`SwkbdConfigMakePresetDefault`) prefilled with the current string.
@@ -64,9 +65,12 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
   - `mus_fluidsynth_gain`: `100` (upstream: `50`)
   - `mus_opl_gain`: `100` (upstream: `50`)
 
+### `prboom2/src/dsda/configuration.h`
+- Exports `dsda_HackStringConfig()` — sets and persists a string config value without firing its `onUpdate` callback. Used by `I_SwitchDetectSoundfont()` to default `snd_midiplayer` before the WAD system is ready; a full `dsda_UpdateStringConfig` call would fire `M_ChangeMIDIPlayer`, which calls `S_RestartMusic` → `W_LumpByNum` before WADs are loaded, causing a crash.
+
 ### `prboom2/src/SDL/i_main.c`
 - Calls `I_SwitchInit()` at the very start of `main()`.
-- Calls `I_SwitchDetectSoundfont()` immediately after `M_LoadDefaults()`; calls `M_SaveDefaults()` only if it returns `1` (i.e. the soundfont config was changed).
+- Calls `I_SwitchDetectSoundfont()` immediately after `M_LoadDefaults()`; calls `M_SaveDefaults()` only if it returns `1` (config was changed)
 
 ### `prboom2/src/SDL/i_system.c`
 - `I_GetXDGDataHome()`, `I_GetXDGDataDirs()`, and `I_ConfigDir()` all return `SWITCH_DATA_DIR` (`"sdmc:/switch/nyan-doom"`) on Switch so configs, saves, and asset lookups are rooted on the SD card.

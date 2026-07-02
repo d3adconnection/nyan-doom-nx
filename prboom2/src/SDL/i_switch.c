@@ -102,15 +102,28 @@ int I_SwitchDetectSoundfont(void)
   closedir(d);
 
   if (!found)
+  {
+    // No soundfont available; use OPL so MIDI works out of the box.
+    // Use dsda_HackStringConfig (no callback) because this runs before WADs
+    // are loaded; dsda_UpdateStringConfig would fire M_ChangeMIDIPlayer which
+    // calls S_RestartMusic -> W_LumpByNum before the WAD system is ready.
+    player = dsda_StringConfig(dsda_config_snd_midiplayer);
+    if (!player || !player[0])
+    {
+      dsda_HackStringConfig(dsda_config_snd_midiplayer, "opl", true);
+      changed = 1;
+    }
     return changed;
+  }
 
   dsda_UpdateStringConfig(dsda_config_snd_soundfont, found_path, true);
   lprintf(LO_INFO, "I_SwitchDetectSoundfont: auto-detected %s\n", found_path);
 
-  // Enable FluidSynth only if the player hasn't been explicitly chosen.
+  // Soundfont found; enable FluidSynth if the player hasn't been chosen.
+  // Same caveat: use HackStringConfig to avoid the premature callback.
   player = dsda_StringConfig(dsda_config_snd_midiplayer);
   if (!player || !player[0])
-    dsda_UpdateStringConfig(dsda_config_snd_midiplayer, "fluidsynth", true);
+    dsda_HackStringConfig(dsda_config_snd_midiplayer, "fluidsynth", true);
 
   return 1;
 }

@@ -531,6 +531,9 @@ int dsda_DecrementIntConfig(dsda_config_identifier_t id, dboolean persist);
 int dsda_CycleConfig(dsda_config_identifier_t id, dboolean persist);
 int dsda_UpdateIntConfig(dsda_config_identifier_t id, int value, dboolean persist);
 const char* dsda_UpdateStringConfig(dsda_config_identifier_t id, const char* value, dboolean persist);
+// Like dsda_UpdateStringConfig but fires no onUpdate callback. Safe to call
+// before subsystems (WAD, sound) are initialised.
+const char* dsda_HackStringConfig(dsda_config_identifier_t id, const char* value, dboolean persist);
 int dsda_IntConfig(dsda_config_identifier_t id);
 int dsda_TransientIntConfig(dsda_config_identifier_t id);
 int dsda_LowerLimitConfig(dsda_config_identifier_t id);
