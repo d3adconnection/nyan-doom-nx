@@ -13,7 +13,12 @@ CMake toolchain file for devkitA64 cross-compilation. Includes `$DEVKITPRO/cmake
 All Switch platform glue, called from `i_main.c`:
 - `I_SwitchInit()` — initialises BSD sockets (nxlink debug), creates `sdmc:/switch/nyan-doom/` and `chdir`s into it so all relative paths (config, saves, WADs) land on the SD card.
 - `I_SwitchShutdown()` — tears down sockets.
-- `I_SwitchApplyAudioDefaults()` — called after `M_LoadDefaults()`; boosts the FluidSynth gain default from 50 → 100 (synth.gain 0.5 → 1.0) on first run; scans the data directory for the first `.sf2` soundfont and writes its path into `snd_soundfont` if not already configured; if a soundfont was auto-detected and `snd_midiplayer` is not already configured, also sets it to `"fluidsynth"`.
+- `I_SwitchDetectSoundfont()` — called after `M_LoadDefaults()`; manages soundfont auto-configuration on every launch:
+  - If `snd_soundfont` is set but the file no longer exists, clears it (allows a replacement to be picked up).
+  - If `snd_soundfont` is blank and a `.sf2` file is present in the data directory, sets `snd_soundfont` to its path and, if `snd_midiplayer` is also blank, sets it to `"fluidsynth"`.
+  - Returns `1` if the config was changed (caller saves); `0` if nothing was done.
+- `I_SwitchGetNumericInput(current_value, buf, buf_size)` — opens the system numpad (`SwkbdType_NumPad`) prefilled with the current integer value. Returns 1 on confirm (result in `buf`), 0 on cancel or failure. Wraps the call in `appletLockExit`/`appletUnlockExit` and flushes SDL events on return.
+- `I_SwitchGetStringInput(current, buf, buf_size)` — same but opens the full QWERTY keyboard (`SwkbdConfigMakePresetDefault`) prefilled with the current string.
 
 ### `prboom2/src/gl_stub.c`
 Stub implementations of every OpenGL fixed-function and `gld_*` call. The Switch only has GLES/EGL — no desktop GL — so the GL renderer is compiled out entirely and these stubs satisfy the linker.
@@ -50,15 +55,25 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
 - Bypasses `I_FindFile2()` (desktop file search) when loading a soundfont — uses `fopen(snd_soundfont, "rb")` directly since `snd_soundfont` is always an absolute `sdmc:/` path on Switch.
 - Nulls `f_syn`/`f_set` in all failure paths to prevent double-free.
 
+### `prboom2/src/dsda/configuration.c`
+- Switch-specific compile-time defaults via `#ifdef __SWITCH__` in the `dsda_config[]` array:
+  - `screen_resolution`: `"1280x720"` (upstream: `"640x480"`)
+  - `use_fullscreen`: `1` (upstream: `0`)
+  - `render_vsync`: `1` (upstream: `0`)
+  - `use_game_controller`: `1` (upstream: `0`)
+  - `mus_fluidsynth_gain`: `100` (upstream: `50`)
+  - `mus_opl_gain`: `100` (upstream: `50`)
+
 ### `prboom2/src/SDL/i_main.c`
 - Calls `I_SwitchInit()` at the very start of `main()`.
-- Calls `I_SwitchApplyAudioDefaults()` immediately after `M_LoadDefaults()`.
+- Calls `I_SwitchDetectSoundfont()` immediately after `M_LoadDefaults()`; calls `M_SaveDefaults()` only if it returns `1` (i.e. the soundfont config was changed).
 
 ### `prboom2/src/SDL/i_system.c`
 - `I_GetXDGDataHome()`, `I_GetXDGDataDirs()`, and `I_ConfigDir()` all return `SWITCH_DATA_DIR` (`"sdmc:/switch/nyan-doom"`) on Switch so configs, saves, and asset lookups are rooted on the SD card.
 
 ### `prboom2/src/SDL/i_video.c`
-- Forces `desired_screenwidth = 1280`, `desired_screenheight = 720`, fullscreen, and the software renderer on Switch (no desktop GL available). These are applied after the config is read so they override any saved values.
+- Forces `desired_screenwidth = 1280` and `desired_screenheight = 720` on Switch after parsing the config, so the render resolution is always the native panel size regardless of the saved `screen_resolution` value.
+- The software renderer is enforced at build time (GL sources compiled out, `gl_stub.c` linked in) rather than at runtime.
 
 ### `prboom2/src/m_misc.c`
 - **Config parser:** `sscanf` format in `M_LoadDefaults()` changed from `%[^\n]` to `%[^\r\n]`. On Switch and other platforms where `fopen` does not strip `\r`, a CRLF config file causes `strparm` to capture a trailing `\r`. The existing `strparm[len-1] = 0` then removes `\r` instead of the closing `"`, so the stored string is `fluidsynth"` instead of `fluidsynth`. Stopping at `\r` or `\n` fixes this.
@@ -74,11 +89,20 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
   `input_nextweapon` (`BUTTON_Y` → physical X) and `input_prevweapon` (`BUTTON_X` → physical Y) were already routed to the correct physical buttons; only their display labels required the fix in `game_controller.c`.
 
 ### `prboom2/src/m_menu.c`
-- `M_ItemDisabled()`: returns `true` on Switch for the four video settings that are forced at runtime — Video mode, Screen Resolution, Fullscreen Video mode, and Exclusive Fullscreen — so they are greyed out and non-interactive in the settings menu.
+- `M_ItemDisabled()`: returns `true` on Switch for settings:
+  - **Video mode**, **Screen Resolution**, **Fullscreen Video mode**, **Exclusive Fullscreen** — forced to fixed values at startup (1280×720, software renderer, fullscreen).
+  - **Mute When Out of Focus** — Switch apps are suspended when not in focus
+  - **Enable Gamepad** — the Joy-Con is always active on Switch (forced in `game_controller.c`)
+- `M_ClearMenus()`: on Switch, calls `M_SaveDefaults()` when the menu being closed is within the Options (Settings) hierarchy — detected by walking the `prevMenu` chain to find `&OptionsDef`.
+- **Software keyboard (numeric fields):** On Switch, pressing confirm on an `S_NUM`/`S_PERC` menu item (e.g. deadzone values) calls `I_SwitchGetNumericInput()` instead of entering the keyboard-gather loop. The system numpad overlay appears, and the confirmed value is committed directly.
+- **Software keyboard (string fields):** Same for `S_STRING` items (e.g. player name) — calls `I_SwitchGetStringInput()` and commits the result directly, bypassing the character-by-character editing buffer.
 
 ### `prboom2/src/SDL/i_sound.c`
 - `midiplayers[]`: null-terminated after `"opl"` on Switch so PortMIDI does not appear in the Preferred MIDI Player menu (PortMIDI is not available on Switch).
 - `M_ChangeMIDIPlayer()`: portmidi selection branch guarded with `#ifndef __SWITCH__` to prevent a null-pointer dereference if an old config file has `snd_midiplayer portmidi`.
+
+### `prboom2/src/s_sound.c`
+- `S_ChangeMusInfoMusic()`: early-return guard tightened from `if (music->lumpnum == lumpnum)` to `if (music->lumpnum == lumpnum && mus_playing)`. After `S_StopMusic()`, `mus_playing` is `NULL` but the lumpnum field retains its old value, so the original guard fired and silently skipped the restart. This caused silence after switching MIDI players on any map using MUSINFO/MAPINFO music.
 
 ### `prboom2/src/dsda/endoom.c`
 - Calls `SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT)` before the ENDOOM wait loop to drain any button-press events that were queued during the quit dialog, preventing an instant-exit.
@@ -98,4 +122,4 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
 - Guards the `#include <GL/glu.h>` line behind `!defined(__SWITCH__)`.
 
 ### `prboom2/src/textscreen/txt_sdl.c`
-- In `TXT_GetChar()`, `SDL_CONTROLLERBUTTONDOWN` and `SDL_JOYBUTTONDOWN` events return `1` on Switch. This covers all textscreen UI — the ENDOOM screen, setup/configuration menus, and confirmation dialogs — none of which can receive keyboard input on Switch (no physical keyboard).
+- In `TXT_GetChar()`, `SDL_CONTROLLERBUTTONDOWN` and `SDL_JOYBUTTONDOWN` events return `1` on Switch. This covers all textscreen UI — the ENDOOM screen, setup/configuration menus, and confirmation dialogs.

@@ -21,6 +21,8 @@
 #include <dirent.h>
 #include <unistd.h>
 
+#include "SDL.h"
+
 #include "i_switch.h"
 #include "lprintf.h"
 #include "dsda/configuration.h"
@@ -54,7 +56,10 @@ void I_SwitchInit(void)
   switch_initialized = 1;
 }
 
-void I_SwitchApplyAudioDefaults(void)
+// Scan the data directory for a .sf2 soundfont and configure snd_soundfont /
+// snd_midiplayer when snd_soundfont is blank.  Returns 1 if the config was
+// changed and should be saved, 0 otherwise.
+int I_SwitchDetectSoundfont(void)
 {
   const char *sf;
   const char *player;
@@ -62,23 +67,29 @@ void I_SwitchApplyAudioDefaults(void)
   struct dirent *ent;
   char found_path[512];
   int found = 0;
+  int changed = 0;
 
-  // Boost FluidSynth gain on Switch if still at the upstream default (50 → gain=0.5).
-  // The Switch audio pipeline is quieter; 100 → gain=1.0 gives better volume at max.
-  // Only applies on first run; user changes in the menu are saved and take precedence.
-  if (dsda_IntConfig(dsda_config_mus_fluidsynth_gain) == 50)
-    dsda_UpdateIntConfig(dsda_config_mus_fluidsynth_gain, 100, true);
-
-  // Only auto-set snd_soundfont when the user hasn't configured it.
   sf = dsda_StringConfig(dsda_config_snd_soundfont);
+
+  // If a soundfont path is configured but the file no longer exists, clear it
+  // so the scan below can find a replacement (e.g. user swapped the file).
+  if (sf && sf[0] && access(sf, F_OK) != 0)
+  {
+    lprintf(LO_INFO, "I_SwitchDetectSoundfont: %s missing, clearing\n", sf);
+    dsda_UpdateStringConfig(dsda_config_snd_soundfont, "", true);
+    sf = "";
+    changed = 1;
+  }
+
+  // Only scan when snd_soundfont is blank.
   if (sf && sf[0])
-    return;
+    return 0;
 
   // Scan SWITCH_DATA_DIR for the first .sf2 soundfont file (any filename).
   // Use "." since I_SwitchInit already chdired to SWITCH_DATA_DIR.
   d = opendir(".");
   if (!d)
-    return;
+    return changed;
 
   while ((ent = readdir(d)) != NULL) {
     size_t len = strlen(ent->d_name);
@@ -91,16 +102,96 @@ void I_SwitchApplyAudioDefaults(void)
   closedir(d);
 
   if (!found)
-    return;
+    return changed;
 
-  // Persist so subsequent launches skip auto-detection (user can override in cfg).
   dsda_UpdateStringConfig(dsda_config_snd_soundfont, found_path, true);
-  lprintf(LO_INFO, "I_SwitchApplyAudioDefaults: auto-detected soundfont %s\n", found_path);
+  lprintf(LO_INFO, "I_SwitchDetectSoundfont: auto-detected %s\n", found_path);
 
-  // Switch to FluidSynth player only if the user hasn't explicitly chosen one.
+  // Enable FluidSynth only if the player hasn't been explicitly chosen.
   player = dsda_StringConfig(dsda_config_snd_midiplayer);
   if (!player || !player[0])
     dsda_UpdateStringConfig(dsda_config_snd_midiplayer, "fluidsynth", true);
+
+  return 1;
+}
+
+// ---------------------------------------------------------------------------
+// Software keyboard helpers
+//
+// Pop up the system swkbd overlay and return the typed string.  Both
+// functions return 1 on confirm, 0 on cancel or failure.
+// ---------------------------------------------------------------------------
+
+int I_SwitchGetNumericInput(int current_value, char *buf, size_t buf_size)
+{
+  SwkbdConfig kbd;
+  Result rc;
+  char initial[24];
+
+  snprintf(initial, sizeof(initial), "%d", current_value);
+
+  rc = swkbdCreate(&kbd, 0);
+  if (R_FAILED(rc))
+  {
+    lprintf(LO_WARN, "I_SwitchGetNumericInput: swkbdCreate failed (0x%x)\n", rc);
+    return 0;
+  }
+
+  swkbdConfigMakePresetDefault(&kbd);
+  swkbdConfigSetType(&kbd, SwkbdType_NumPad);
+  swkbdConfigSetLeftOptionalSymbolKey(&kbd, "-");  // allow negative values
+  swkbdConfigSetInitialText(&kbd, initial);
+  swkbdConfigSetStringLenMax(&kbd, (int)(buf_size - 1));
+
+  appletLockExit();
+  rc = swkbdShow(&kbd, buf, buf_size);
+  appletUnlockExit();
+  swkbdClose(&kbd);
+
+  // Drain any button events that were queued while the applet was open
+  // so they don't feed back into the game's input handling.
+  SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
+
+  if (R_FAILED(rc))
+  {
+    lprintf(LO_WARN, "I_SwitchGetNumericInput: swkbdShow failed (0x%x)\n", rc);
+    return 0;
+  }
+
+  return buf[0] != '\0';
+}
+
+int I_SwitchGetStringInput(const char *current, char *buf, size_t buf_size)
+{
+  SwkbdConfig kbd;
+  Result rc;
+
+  rc = swkbdCreate(&kbd, 0);
+  if (R_FAILED(rc))
+  {
+    lprintf(LO_WARN, "I_SwitchGetStringInput: swkbdCreate failed (0x%x)\n", rc);
+    return 0;
+  }
+
+  swkbdConfigMakePresetDefault(&kbd);
+  if (current && current[0])
+    swkbdConfigSetInitialText(&kbd, current);
+  swkbdConfigSetStringLenMax(&kbd, (int)(buf_size - 1));
+
+  appletLockExit();
+  rc = swkbdShow(&kbd, buf, buf_size);
+  appletUnlockExit();
+  swkbdClose(&kbd);
+
+  SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
+
+  if (R_FAILED(rc))
+  {
+    lprintf(LO_WARN, "I_SwitchGetStringInput: swkbdShow failed (0x%x)\n", rc);
+    return 0;
+  }
+
+  return 1;
 }
 
 #endif // __SWITCH__

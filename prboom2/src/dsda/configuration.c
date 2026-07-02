@@ -1246,7 +1246,11 @@ dsda_config_t dsda_config[dsda_config_count] = {
   },
   [dsda_config_use_game_controller] = {
     "use_game_controller", dsda_config_use_game_controller,
+#ifdef __SWITCH__
+    dsda_config_int, 0, 2, { 1 }, NULL, NOT_STRICT, dsda_InitGameController
+#else
     dsda_config_int, 0, 2, { 0 }, NULL, NOT_STRICT, dsda_InitGameController
+#endif
   },
   [dsda_config_deh_change_cheats] = {
     "dsda_deh_change_cheats", dsda_config_deh_change_cheats,
@@ -1326,7 +1330,11 @@ dsda_config_t dsda_config[dsda_config_count] = {
   },
   [dsda_config_mus_fluidsynth_gain] = {
     "mus_fluidsynth_gain", dsda_config_mus_fluidsynth_gain,
+#ifdef __SWITCH__
+    dsda_config_int, 0, 1000, { 100 }
+#else
     dsda_config_int, 0, 1000, { 50 }
+#endif
   },
   [dsda_config_mus_fluidsynth_chorus_depth] = {
     "mus_fluidsynth_chorus_depth", dsda_config_mus_fluidsynth_chorus_depth,
@@ -1354,7 +1362,11 @@ dsda_config_t dsda_config[dsda_config_count] = {
   },
   [dsda_config_mus_opl_gain] = {
     "mus_opl_gain", dsda_config_mus_opl_gain,
+#ifdef __SWITCH__
+    dsda_config_int, 0, 1000, { 100 }
+#else
     dsda_config_int, 0, 1000, { 50 }
+#endif
   },
   [dsda_config_mus_opl_opl3mode] = {
     "mus_opl_opl3mode", dsda_config_mus_opl_opl3mode,
@@ -1891,7 +1903,11 @@ dsda_config_t dsda_config[dsda_config_count] = {
   },
   [dsda_config_screen_resolution] = {
     "screen_resolution", dsda_config_screen_resolution,
+#ifdef __SWITCH__
+    CONF_STRING("1280x720"), NULL, NOT_STRICT, M_ChangeVideoMode
+#else
     CONF_STRING("640x480"), NULL, NOT_STRICT, M_ChangeVideoMode
+#endif
   },
   [dsda_config_custom_resolution] = {
     "custom_resolution", dsda_config_custom_resolution,
@@ -1899,7 +1915,11 @@ dsda_config_t dsda_config[dsda_config_count] = {
   },
   [dsda_config_use_fullscreen] = {
     "use_fullscreen", dsda_config_use_fullscreen,
+#ifdef __SWITCH__
+    CONF_BOOL(1), NULL, NOT_STRICT, M_ChangeFullScreen
+#else
     CONF_BOOL(0), NULL, NOT_STRICT, M_ChangeFullScreen
+#endif
   },
   [dsda_config_exclusive_fullscreen] = {
     "exclusive_fullscreen", dsda_config_exclusive_fullscreen,
@@ -1907,7 +1927,11 @@ dsda_config_t dsda_config[dsda_config_count] = {
   },
   [dsda_config_render_vsync] = {
     "render_vsync", dsda_config_render_vsync,
+#ifdef __SWITCH__
+    CONF_BOOL(1), NULL, NOT_STRICT, M_ChangeVideoMode
+#else
     CONF_BOOL(0), NULL, NOT_STRICT, M_ChangeVideoMode
+#endif
   },
   [dsda_config_uncapped_framerate] = {
     "uncapped_framerate", dsda_config_uncapped_framerate,

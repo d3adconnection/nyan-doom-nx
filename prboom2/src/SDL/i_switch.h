@@ -22,7 +22,16 @@ void I_SwitchInit(void);
 // Tear down libnx subsystems. Registered as an exit handler.
 void I_SwitchShutdown(void);
 
-// After M_LoadDefaults: auto-detect soundfont.sf2 and set audio config if not already configured.
-void I_SwitchApplyAudioDefaults(void);
+// Scan the data directory for a .sf2 soundfont and configure snd_soundfont /
+// snd_midiplayer when snd_soundfont is blank.  Returns 1 if the config was
+// changed and should be saved, 0 otherwise.
+int I_SwitchDetectSoundfont(void);
+
+// Pop up the system software keyboard and return the result in buf (size buf_size).
+// For numeric settings: shows a numpad prefilled with current_value; returns 1 on confirm.
+// For string settings: shows the full keyboard prefilled with current; returns 1 on confirm.
+// Both return 0 on cancel or failure.
+int I_SwitchGetNumericInput(int current_value, char *buf, size_t buf_size);
+int I_SwitchGetStringInput(const char *current, char *buf, size_t buf_size);
 
 #endif // I_SWITCH_H

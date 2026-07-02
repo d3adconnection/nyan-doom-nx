@@ -303,8 +303,10 @@ int main(int argc, char **argv)
   lprintf(LO_DEBUG, "\n");
 
 #ifdef __SWITCH__
-  // Auto-detect soundfont.sf2 and configure FluidSynth if not already set.
-  I_SwitchApplyAudioDefaults();
+  // If snd_soundfont is blank and a .sf2 is present in the data directory,
+  // configure it automatically so the user only needs to drop the file in.
+  if (I_SwitchDetectSoundfont())
+    M_SaveDefaults();
 #endif
 
   /* Version info */

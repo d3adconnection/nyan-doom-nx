@@ -106,6 +106,10 @@
 #include "dsda/animinfo.h"
 #include "dsda/library.h"
 
+#ifdef __SWITCH__
+#include "SDL/i_switch.h"
+#endif
+
 #include "heretic/mn_menu.h"
 #include "heretic/sb_bar.h"
 #include "heretic/hhe/strings.h"
@@ -2510,6 +2514,13 @@ static dboolean M_ItemDisabled(const setup_menu_t* s)
       s->config_id == dsda_config_screen_resolution  ||
       s->config_id == dsda_config_use_fullscreen     ||
       s->config_id == dsda_config_exclusive_fullscreen)
+    return true;
+  // The Switch OS mutes the app automatically when returning to the Home Menu;
+  // the in-game "Mute When Out of Focus" toggle has no effect.
+  if (s->config_id == dsda_config_mute_unfocused_window)
+    return true;
+  // The game controller is always active on Switch; grey out the toggle.
+  if (s->config_id == dsda_config_use_game_controller)
     return true;
 #endif
 
@@ -7563,6 +7574,18 @@ static dboolean M_SetupNavigationResponder(int ch, int action, event_t* ev)
 
     if (flags & (S_NUM | S_PERC))
     {
+#ifdef __SWITCH__
+      {
+        char swkbd_buf[24]; // enough for any int with sign
+        int current = dsda_IntConfig(ptr1->config_id);
+        if (I_SwitchGetNumericInput(current, swkbd_buf, sizeof(swkbd_buf)))
+        {
+          dsda_UpdateIntConfig(ptr1->config_id, atoi(swkbd_buf), true);
+          M_SelectDone(ptr1);
+        }
+        return true;
+      }
+#endif
       setup_gather = true;
       gather_count = 0;
     }
@@ -7579,6 +7602,18 @@ static dboolean M_SetupNavigationResponder(int ch, int action, event_t* ev)
     }
     else if (flags & S_STRING)
     {
+#ifdef __SWITCH__
+      {
+        char swkbd_buf[ENTRY_STRING_BFR_SIZE];
+        const char *current = dsda_StringConfig(ptr1->config_id);
+        if (I_SwitchGetStringInput(current, swkbd_buf, sizeof(swkbd_buf)))
+        {
+          dsda_UpdateStringConfig(ptr1->config_id, swkbd_buf, true);
+          M_SelectDone(ptr1);
+        }
+        return true;
+      }
+#endif
       strncpy(entry_string_index, dsda_StringConfig(ptr1->config_id),
               ENTRY_STRING_BFR_SIZE - 1);
 
@@ -8810,7 +8845,24 @@ void M_ChangeMenu(menu_t *menudef, menuactive_t mnact)
 
 void M_ClearMenus (void)
 {
+#ifdef __SWITCH__
+  // On Switch, write the config when closing any settings menu
+  // Walk the prevMenu chain to detect whether we are anywhere inside the
+  // Options hierarchy — every settings menu has &OptionsDef as an ancestor.
+  {
+    dboolean in_settings = false;
+    menu_t *m = currentMenu;
+    while (m) {
+      if (m == &OptionsDef) { in_settings = true; break; }
+      m = m->prevMenu;
+    }
+    M_ChangeMenu(&MainDef, mnact_inactive);
+    if (in_settings)
+      M_SaveDefaults();
+  }
+#else
   M_ChangeMenu(&MainDef, mnact_inactive);
+#endif
 }
 
 //
