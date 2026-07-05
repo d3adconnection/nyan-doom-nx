@@ -299,6 +299,7 @@ enum {
   dsda_config_snd_midiplayer,
   dsda_config_snd_mididev,
   dsda_config_snd_soundfont,
+  dsda_config_snd_soundfont_dir,
   dsda_config_mus_fluidsynth_chorus,
   dsda_config_mus_fluidsynth_reverb,
   dsda_config_mus_fluidsynth_gain,
@@ -430,9 +431,11 @@ enum {
   dsda_config_automap_linesize,
   dsda_config_automap_rotate,
   dsda_config_automap_follow,
+  dsda_config_automap_mouse_pan,
   dsda_config_automap_grid,
   dsda_config_map_grid_size,
   dsda_config_map_pan_speed,
+  dsda_config_map_mouse_pan_speed,
   dsda_config_map_scroll_speed,
   dsda_config_map_wheel_zoom,
   dsda_config_map_use_multisamling,
@@ -534,6 +537,8 @@ const char* dsda_UpdateStringConfig(dsda_config_identifier_t id, const char* val
 // Like dsda_UpdateStringConfig but fires no onUpdate callback. Safe to call
 // before subsystems (WAD, sound) are initialised.
 const char* dsda_HackStringConfig(dsda_config_identifier_t id, const char* value, dboolean persist);
+int dsda_DefaultIntConfig(dsda_config_identifier_t id);
+const char* dsda_DefaultStringConfig(dsda_config_identifier_t id);
 int dsda_IntConfig(dsda_config_identifier_t id);
 int dsda_TransientIntConfig(dsda_config_identifier_t id);
 int dsda_LowerLimitConfig(dsda_config_identifier_t id);

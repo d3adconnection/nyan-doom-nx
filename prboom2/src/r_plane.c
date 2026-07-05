@@ -209,15 +209,34 @@ static void R_MapPlane(int y, int x1, int x2, draw_span_vars_t *dsvars)
   dsvars->xfrac = FixedMul(dsvars->xfrac, dsvars->xscale);
   dsvars->yfrac = FixedMul(dsvars->yfrac, dsvars->yscale);
 
-  if (!(dsvars->colormap = fixedcolormap) || NYAN_LITEAMP)
+  // Normal dithered lighting
+  if (!(dsvars->colormap = fixedcolormap))
   {
-    int lightshift = NYAN_LITEAMP ? NYAN_LIGHTZSHIFT : LIGHTZSHIFT;
+    int lightshift = LIGHTZSHIFT;
     dsvars->z = distance;
     index = distance >> (lightshift);
     if (index >= MAXLIGHTZ )
       index = MAXLIGHTZ-1;
     dsvars->colormap = dsvars->planezlight[index];
   }
+
+  // Nyan lite amp
+  else if (NYAN_LITEAMP)
+  {
+    int lightshift = NYAN_LIGHTZSHIFT;
+    dsvars->z = distance;
+    index = distance >> (lightshift);
+    if (index >= MAXLIGHTZ )
+      index = MAXLIGHTZ-1;
+    dsvars->colormap = dsvars->planezlight[index];
+
+    // do not allow dithered lighting to go darker than 64
+    if (dsvars->minzlight)
+      if (dsvars->colormap > dsvars->minzlight)
+        dsvars->colormap = dsvars->minzlight;
+  }
+
+  // fullbright
   else
   {
     dsvars->z = 0;
@@ -727,14 +746,19 @@ static void R_DoDrawPlane(visplane_t *pl)
 
       dsvars.planeheight = D_abs(pl->height-viewz);
 
-      if (NYAN_LITEAMP && pl->lightlevel <= 64)
-        pl->lightlevel = 64;
-
       // SoM 10/19/02: deep water colormap fix
       if (fixedcolormap && !NYAN_LITEAMP)
         light = (255  >> LIGHTSEGSHIFT);
       else
-        light = (pl->lightlevel >> LIGHTSEGSHIFT) + (extralight * LIGHTBRIGHT);
+      {
+        int lightlevel = pl->lightlevel;
+
+        // Fixed lower lightlevels to 64
+        if (NYAN_LITEAMP && lightlevel <= 64)
+          lightlevel = 64;
+
+        light = (lightlevel >> LIGHTSEGSHIFT) + (extralight * LIGHTBRIGHT);
+      }
 
       if(light >= LIGHTLEVELS)
         light = LIGHTLEVELS-1;
@@ -744,6 +768,22 @@ static void R_DoDrawPlane(visplane_t *pl)
 
       stop = pl->maxx + 1;
       dsvars.planezlight = zlight[light];
+      dsvars.minzlight = NULL;
+
+      // Set darkest allowed colormap value (64)
+      if (NYAN_LITEAMP)
+      {
+        int minlight = (64 >> LIGHTSEGSHIFT) + (extralight * LIGHTBRIGHT) + NYAN_LITESCALE;
+
+        if (minlight >= LIGHTLEVELS)
+          minlight = LIGHTLEVELS - 1;
+
+        if (minlight < 0)
+          minlight = 0;
+
+        dsvars.minzlight = zlight[minlight][MAXLIGHTZ - 1];
+      }
+
       pl->top[pl->minx-1] = pl->top[stop] = SHRT_MAX; // dropoff overflow
 
       for (x = pl->minx ; x <= stop ; x++)

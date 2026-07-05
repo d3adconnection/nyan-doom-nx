@@ -199,6 +199,7 @@ typedef struct menu_s
 #define MENU_ENTER     -7
 #define MENU_ESCAPE    -8
 #define MENU_CLEAR     -9
+#define MENU_RESET     -10
 
 void M_SetupNextMenu(menu_t *menudef);
 void M_DrawDelVerify(void);
@@ -207,6 +208,7 @@ void M_LeaveSetupMenu(void);
 void M_ClearMenus(void);
 
 void M_RefreshGameSpecificMenuOptions();
+void M_LoadTextColors(void);
 
 extern setup_menu_t auto_colors_settings[];
 extern setup_menu_t auto_heretic_colors_settings[];

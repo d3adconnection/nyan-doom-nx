@@ -138,6 +138,7 @@ cfg_def_t cfg_defs[] =
   MIGRATED_SETTING(dsda_config_snd_midiplayer),
   MIGRATED_SETTING(dsda_config_snd_mididev),
   MIGRATED_SETTING(dsda_config_snd_soundfont),
+  MIGRATED_SETTING(dsda_config_snd_soundfont_dir),
   MIGRATED_SETTING(dsda_config_mus_fluidsynth_chorus),
   MIGRATED_SETTING(dsda_config_mus_fluidsynth_reverb),
   MIGRATED_SETTING(dsda_config_mus_fluidsynth_gain),
@@ -356,9 +357,11 @@ cfg_def_t cfg_defs[] =
   MIGRATED_SETTING(dsda_config_automap_linesize),
   MIGRATED_SETTING(dsda_config_automap_rotate),
   MIGRATED_SETTING(dsda_config_automap_follow),
+  MIGRATED_SETTING(dsda_config_automap_mouse_pan),
   MIGRATED_SETTING(dsda_config_automap_grid),
   MIGRATED_SETTING(dsda_config_map_grid_size),
   MIGRATED_SETTING(dsda_config_map_pan_speed),
+  MIGRATED_SETTING(dsda_config_map_mouse_pan_speed),
   MIGRATED_SETTING(dsda_config_map_scroll_speed),
   MIGRATED_SETTING(dsda_config_map_wheel_zoom),
   MIGRATED_SETTING(dsda_config_map_use_multisamling),
@@ -655,6 +658,7 @@ cfg_input_def_t input_defs[] = {
   INPUT_SETTING("input_map_overlay", dsda_input_map_overlay, 'o', -1, -1),
   INPUT_SETTING("input_map_textured", dsda_input_map_textured, 0, -1, -1),
   INPUT_SETTING("input_map_highlight_by_tag", dsda_input_map_highlight_by_tag, 'h', -1, -1),
+  INPUT_SETTING("input_map_mouse_pan", dsda_input_map_mouse_pan, 'p', -1, -1),
 
   INPUT_SETTING("input_repeat_message", dsda_input_repeat_message, 0, -1, -1),
 
@@ -685,6 +689,7 @@ cfg_input_def_t input_defs[] = {
 #endif
   INPUT_SETTING("input_menu_escape", dsda_input_menu_escape, KEYD_ESCAPE, -1, DSDA_CONTROLLER_BUTTON_START),
   INPUT_SETTING("input_menu_clear", dsda_input_menu_clear, KEYD_DEL, -1, DSDA_CONTROLLER_BUTTON_BACK),
+  INPUT_SETTING("input_menu_reset", dsda_input_menu_reset, 'r', -1, DSDA_CONTROLLER_BUTTON_Y),
 
   INPUT_SETTING("input_iddqd", dsda_input_iddqd, 0, -1, -1),
   INPUT_SETTING("input_buddha", dsda_input_buddha, 0, -1, -1),

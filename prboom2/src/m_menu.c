@@ -144,20 +144,22 @@
 #define S_CREDIT   0x00200000ULL // killough 10/98: credit
 #define S_THERMO   0x00400000ULL // Slider for choosing a value
 #define S_CHOICE   0x00800000ULL // this item has several values
-#define S_DISABLED 0x01000000ULL
-#define S_NAME     0x02000000ULL
-#define S_RESET_Y  0x04000000ULL
-#define S_FUNC     0x08000000ULL
-#define S_PERC     0x10000000ULL
-#define S_CRBLOOD  0x20000000ULL
-#define S_STR      0x40000000ULL // need to refactor things...
-#define S_NYAN     0x80000000ULL
-#define S_NYAN_HILITE   0x000000100000000ULL
-#define S_CRCHOICE      0x000000200000000ULL
-#define S_HIDDEN        0x000000400000000ULL
-// #define S_           0x000000800000000ULL
-// #define S_           0x000001000000000ULL
-#define S_NOCLEAR       0x800000000000000ULL
+#define S_NAME     0x01000000ULL
+#define S_RESET_Y  0x02000000ULL
+#define S_STR      0x04000000ULL // need to refactor things...
+#define S_NOCLEAR  0x08000000ULL
+#define S_PERC     0x10000000ULL // percent
+#define S_CRCHOICE 0x20000000ULL // color choice
+#define S_CRBLOOD  0x40000000ULL // bloodcolor choice
+#define S_FUNC     0x80000000ULL // function
+
+// NYAN
+#define S_NYAN          0x000000100000000ULL // mark nyan options
+#define S_NYAN_HILITE   0x000000200000000ULL // highlight nyan options
+#define S_DISABLED      0x000000400000000ULL // disabled / darken options
+#define S_HIDDEN        0x000000800000000ULL // hide game-specific options
+#define S_NORESET       0x000001000000000ULL // exclude from reset
+#define S_TWO_LINE      0x000002000000000ULL // draw two-line option
 
 /* S_SHOWDESC  = the set of items whose description should be displayed
  * S_SHOWSET   = the set of items whose setting should be displayed
@@ -194,6 +196,8 @@ static dboolean level_table_active = false;
 static dboolean setup_select      = false; // changing an item
 static dboolean setup_gather      = false; // gathering keys for value
 static dboolean colorbox_active   = false; // color palette being shown
+static dboolean setup_reset_verify = false;
+static setup_menu_t *setup_reset_item = NULL;
 
 // submenus
 static dboolean sub_advanced_audio_active = false;
@@ -348,6 +352,7 @@ static int  M_StringWidth(const char *string);
 static int  M_StringHeight(const char *string);
 static void M_DrawTitle(int y, const char *text, int cm);
 static void M_DrawTitleImage(int x, int y, const char *patch, const char *text, int cm);
+static void M_DrawSetupResetVerify(void);
 static void M_StartMessage(const char *string,void *routine,dboolean input);
 static void M_StopMessage(void);
 
@@ -488,7 +493,7 @@ static int cr_warning;
 static int cr_scrollbar;
 static int cr_nyan_feature;
 
-static void M_LoadTextColors(void)
+void M_LoadTextColors(void)
 {
   cr_logo = dsda_TextCR(dsda_tc_menu_logo);
   cr_title = dsda_TextCR(dsda_tc_menu_title);
@@ -2167,6 +2172,7 @@ static int choice_value;
 
 #define SOFTWARE_MODE 0
 #define OPENGL_MODE   1
+#define MIDI_FLUIDSYNTH 0
 
 static dboolean M_DependantDisabled(const setup_menu_t* s)
 {
@@ -2185,6 +2191,12 @@ static dboolean M_DependantDisabled(const setup_menu_t* s)
 
         // Disable Software Options in OpenGL
         if ((dep->value == SOFTWARE_MODE) && V_IsOpenGLMode())
+          return true;
+      }
+      // Fluidsynth Soundfont
+      else if (dep->config_id == dsda_config_snd_midiplayer)
+      {
+        if ((dep->value == MIDI_FLUIDSYNTH) && stricmp(dsda_StringConfig(dsda_config_snd_midiplayer), "fluidsynth"))
           return true;
       }
       else  // Default behaviour
@@ -2581,6 +2593,10 @@ static int GetOptionColor(menu_flags_t flags)
 
 // CPhipps - static, hanging else removed, const parameter
 
+static dboolean M_PrevChoiceExists(const setup_menu_t *s);
+static dboolean M_NextChoiceExists(const setup_menu_t *s);
+static void M_ChoiceBlinkingArrowRight(const setup_menu_t *s, int x, int y, int color);
+
 #define S_HIDDEN_FLAGS (S_HIDDEN | S_SKIP | S_NOSELECT)
 
 static void M_DrawItem(const setup_menu_t* s, int y)
@@ -2622,7 +2638,17 @@ static void M_DrawItem(const setup_menu_t* s, int y)
 
     // print a blinking left "arrow" before highlighted menu item
     if (M_ItemSelected(s))
-      M_DrawString(x - 8, y, color, ">");
+    {
+      if (setup_select && (flags & (S_CHOICE | S_CRCHOICE | S_THERMO)))
+      {
+        if (M_PrevChoiceExists(s))
+          M_DrawString(x - 8, y, color, "<");
+
+        // if first choice, don't draw arrow
+      }
+      else // if not in setup, draw arrow
+        M_DrawString(x - 8, y, color, ">");
+    }
 
     // print a blinking right "arrow" after highlighted function
     if (flags & S_FUNC)
@@ -2682,6 +2708,226 @@ static void M_GetStringWithEllipsis(char* dest, const char* src, int max_width)
 
   // Combine fitted substring + "..."
   snprintf(dest, ENTRY_STRING_BFR_SIZE, "%s%s", temp, ellipsis);
+}
+
+static void M_TrimEllipsisFragment(char *text)
+{
+  int len = (int)strlen(text);
+  dboolean trimmed_dot = false;
+
+  while (len > 0 && text[len - 1] == '.')
+  {
+    text[--len] = '\0';
+    trimmed_dot = true;
+  }
+
+  if (trimmed_dot)
+  {
+    char *space = strrchr(text, ' ');
+
+    if (space && space[1])
+      *space = '\0';
+  }
+}
+
+static void M_GetTrimmedStringWithEllipsis(char* dest, const char* src, int max_width)
+{
+  const char *ellipsis = "...";
+  int ellipsis_width = M_GetPixelWidth(ellipsis);
+  char temp[ENTRY_STRING_BFR_SIZE];
+
+  M_GetFittingString(temp, src, max_width - ellipsis_width);
+  M_TrimEllipsisFragment(temp);
+
+  snprintf(dest, ENTRY_STRING_BFR_SIZE, "%s%s", temp, ellipsis);
+}
+
+//
+// Two Line Choice
+//
+
+static const char *M_TwoLineChoiceArrow(const setup_menu_t *s)
+{
+  if (!M_ItemSelected(s))
+    return NULL;
+
+  if (setup_select)
+    return M_NextChoiceExists(s) ? " >" : NULL;
+
+  return " <";
+}
+
+static void M_DrawTwoLineChoiceString(const setup_menu_t *s, int x, int y, int color)
+{
+  char line1[sizeof(menu_buffer)];
+  char line2[sizeof(menu_buffer)];
+  int max_width = BASE_WIDTH - x - 12;
+  const char *arrow;
+  dboolean has_arrow;
+  int arrow_width;
+  int len;
+  dboolean fits_on_one_line;
+
+  M_GetFittingString(line1, menu_buffer, max_width);
+  len = (int)strlen(line1);
+  fits_on_one_line = !menu_buffer[len];
+
+  // If it fits on one line, then just draw normally
+  if (fits_on_one_line)
+  {
+    M_ChoiceBlinkingArrowRight(s, x, y, color);
+    M_DrawMenuString(x, y, color);
+    return;
+  }
+
+  // at this point we hit the 2 line string
+  arrow = M_TwoLineChoiceArrow(s);
+  has_arrow = arrow != NULL;
+  arrow_width = M_GetPixelWidth(" >");
+
+  {
+    const char *remaining_text = menu_buffer + len;
+    int line2_width = max_width - arrow_width;
+
+    if (line2_width < 1)
+      line2_width = max_width;
+
+    // Trim line 2 if needed, leaving room for the arrow.
+    if (M_GetPixelWidth(remaining_text) > line2_width)
+      M_GetTrimmedStringWithEllipsis(line2, remaining_text, line2_width);
+    else
+      snprintf(line2, sizeof(line2), "%s", remaining_text);
+  }
+
+  M_DrawString(x, y, color, line1);     // line 1
+  M_DrawString(x, y + 8, color, line2); // line 2
+
+  if (has_arrow)
+    M_DrawString(x + M_GetPixelWidth(line2), y + 8, color, arrow);
+}
+
+//
+// Check next or prev choices
+//
+
+static int M_IndexInChoices(const char *str, const char **choices) {
+  int i = 0;
+
+  while (*choices != NULL) {
+    if (!strcmp(str, *choices))
+      return i;
+    i++;
+    choices++;
+  }
+  return 0;
+}
+
+// select either color or config list
+static const char **M_SetupChoiceList(const setup_menu_t *s)
+{
+  return (s->m_flags & S_CRCHOICE) ? color_list : s->selectstrings;
+}
+
+// Treat empty string choices as their default value (only for S_STR)
+static const char *M_ChoiceStringConfig(const setup_menu_t *s)
+{
+  const char *value = dsda_StringConfig(s->config_id);
+
+  if (!value || !value[0])
+    value = dsda_DefaultStringConfig(s->config_id);
+
+  return value;
+}
+
+static int M_SetupChoiceValue(const setup_menu_t *s)
+{
+  menu_flags_t flags = s->m_flags;
+
+  if (flags & S_THERMO)
+    return dsda_IntConfig(s->config_id);
+
+  if (flags & S_STR)
+  {
+    const char *value = (setup_select && (s->m_flags & (S_HILITE | S_SELECT))) ? entry_string_index : M_ChoiceStringConfig(s);
+
+    return M_IndexInChoices(value, M_SetupChoiceList(s));
+  }
+
+  if (setup_select && (s->m_flags & (S_HILITE | S_SELECT)))
+    return choice_value;
+
+  if (flags & S_CRCHOICE)
+    return dsda_TextColorConfig(s->config_id);
+
+  return dsda_IntConfig(s->config_id);
+}
+
+static int M_StepThroughChoices(const char **choice_list, int value, int direction)
+{
+  while (value > 0 && choice_list && choice_list[value] && choice_list[value][0] == '~')
+    value += direction;
+
+  return value;
+}
+
+static dboolean M_PrevChoiceExists(const setup_menu_t *s)
+{
+  int value = M_SetupChoiceValue(s);
+  menu_flags_t flags = s->m_flags;
+  const char **choice_list;
+
+  if (flags & S_THERMO)
+    return value > dsda_LowerLimitConfig(s->config_id);
+
+  if (flags & S_STR)
+    return value > 0;
+
+  choice_list = M_SetupChoiceList(s);
+
+  value = M_StepThroughChoices(choice_list, value - 1, -1);
+
+  if (choice_list)
+    return value >= 0 && choice_list[value][0] != '~';
+
+  return value >= dsda_LowerLimitConfig(s->config_id);
+}
+
+static dboolean M_NextChoiceExists(const setup_menu_t *s)
+{
+  int value = M_SetupChoiceValue(s);
+  menu_flags_t flags = s->m_flags;
+  const char **choice_list;
+
+  if (flags & S_THERMO)
+    return value < dsda_UpperLimitConfig(s->config_id);
+
+  choice_list = M_SetupChoiceList(s);
+
+  if (flags & S_STR)
+    return choice_list && choice_list[value + 1];
+
+  value = M_StepThroughChoices(choice_list, value + 1, 1);
+
+  if (choice_list)
+    return choice_list[value] != NULL;
+
+  return value <= dsda_UpperLimitConfig(s->config_id);
+}
+
+static void M_ChoiceBlinkingArrowRight(const setup_menu_t *s, int x, int y, int color)
+{
+  if (M_ItemSelected(s))
+  {
+    if (setup_select)
+    {
+      if (M_NextChoiceExists(s))
+        M_DrawString(x + M_GetPixelWidth(menu_buffer), y, color, " >");
+    }
+    else
+    {
+      M_BlinkingArrowRight(s);
+    }
+  }
 }
 
 static void M_DrawSetting(const setup_menu_t* s, int y)
@@ -2970,12 +3216,12 @@ static void M_DrawSetting(const setup_menu_t* s, int y)
       if (setup_select && (s->m_flags & (S_HILITE | S_SELECT)))
         snprintf(menu_buffer, sizeof(menu_buffer), "%s", entry_string_index);
       else
-        snprintf(menu_buffer, sizeof(menu_buffer), "%s", dsda_StringConfig(s->config_id));
+        snprintf(menu_buffer, sizeof(menu_buffer), "%s", M_ChoiceStringConfig(s));
     }
     else
     {
       int value;
-      const char **choice_list = (flags & S_CRCHOICE) ? color_list : s->selectstrings;
+      const char **choice_list = M_SetupChoiceList(s);
 
       if (setup_select && (s->m_flags & (S_HILITE | S_SELECT)))
         value = choice_value;
@@ -3022,7 +3268,13 @@ static void M_DrawSetting(const setup_menu_t* s, int y)
       }
     }
 
-    M_BlinkingArrowRight(s);
+    if (flags & S_TWO_LINE)
+    {
+      M_DrawTwoLineChoiceString(s, x, y, color);
+      return;
+    }
+
+    M_ChoiceBlinkingArrowRight(s, x, y, color);
     M_DrawMenuString(x,y,color);
     return;
   }
@@ -3040,7 +3292,7 @@ static void M_DrawSetting(const setup_menu_t* s, int y)
     else
       snprintf(menu_buffer, sizeof(menu_buffer), "%d", dsda_IntConfig(s->config_id));
 
-    M_BlinkingArrowRight(s);
+    M_ChoiceBlinkingArrowRight(s, x + 80, y + 3, color);
     M_DrawMenuString(x + 80, y + 3, color);
     return;
   }
@@ -3155,6 +3407,10 @@ static void M_DrawScreenItems(const setup_menu_t* base_src, int base_y)
       carry_y += 6;
       desc_y += 3;
     }
+    else if (src->m_flags & S_TWO_LINE)
+    {
+      carry_y += line_height;
+    }
 
     // See if we're to draw the item description (left-hand part)
     if (src->m_flags & S_SHOWDESC)
@@ -3164,6 +3420,9 @@ static void M_DrawScreenItems(const setup_menu_t* base_src, int base_y)
     if (src->m_flags & S_SHOWSET)
       M_DrawSetting(src, set_y);
   }
+
+  if (setup_reset_verify)
+    M_DrawSetupResetVerify();
 }
 
 // Draws the name of each page. If there are more than m, uses a carousel
@@ -3230,14 +3489,115 @@ void M_DrawTabs(const char **pages, int m, int y)
 
 // [FG] delete a savegame
 
-void M_DrawDelVerify(void)
+static void M_DrawVerify(const char* message, dboolean blinking)
 {
   V_DrawMenuNamePatch(VERIFYBOXXORG,VERIFYBOXYORG,"M_VBOX",CR_DEFAULT,VPT_STRETCH);
 
-  if (whichSkull) {
-    strcpy(menu_buffer,"Delete savegame? (Y or N)");
+  if (whichSkull || !blinking) {
+    strcpy(menu_buffer, message);
     M_DrawMenuString(VERIFYBOXXORG + 8, VERIFYBOXYORG + 8, cr_warning);
   }
+}
+
+void M_DrawDelVerify(void)
+{
+  M_DrawVerify("Delete savegame? (Y or N)", true);
+}
+
+static void M_DrawSetupResetVerify(void)
+{
+  M_DrawVerify("Reset to default? (Y or N)", false);
+}
+
+//
+// Reset logic / defaults
+//
+
+static dboolean M_SetupItemCanReset(const setup_menu_t *s)
+{
+  return s->config_id && !(s->m_flags & (S_INPUT | S_FUNC | S_WEAP | S_STRING | S_NORESET));
+}
+
+static dboolean M_ResetSetupItemDefault(setup_menu_t *ptr)
+{
+  menu_flags_t flags = ptr->m_flags;
+
+  if (!M_SetupItemCanReset(ptr))
+    return false;
+
+  switch (flags & (S_STR | S_YESNO | S_NUM | S_PERC | S_COLOR | S_CRCHOICE | S_CHOICE | S_THERMO))
+  {
+    case S_CHOICE | S_STR:
+      dsda_UpdateStringConfig(ptr->config_id, dsda_DefaultStringConfig(ptr->config_id), true);
+      return true;
+
+    case S_CRCHOICE:
+      dsda_UpdateTextColorConfig(ptr->config_id, dsda_DefaultTextColorConfig(ptr->config_id));
+      return true;
+
+    case S_YESNO:
+    case S_NUM:
+    case S_PERC:
+    case S_COLOR:
+    case S_CHOICE:
+    case S_THERMO:
+    case S_THERMO | S_PERC:
+      dsda_UpdateIntConfig(ptr->config_id, dsda_DefaultIntConfig(ptr->config_id), true);
+      return true;
+
+    default:
+      return false;
+  }
+
+  return false;
+}
+
+static void M_StartSetupResetVerify(setup_menu_t *ptr)
+{
+  setup_reset_item = ptr;
+  setup_reset_verify = true;
+  S_StartVoidSound(g_sfx_menu);
+}
+
+typedef enum {
+  confirmation_null = -1,
+  confirmation_no = 0,
+  confirmation_yes = 1,
+} confirmation_t;
+
+static confirmation_t M_EventToConfirmation(int ch, int action, event_t* ev)
+{
+  if (ch == 'y' || action == MENU_ENTER)
+    return confirmation_yes;
+  else if (ch == ' ' || ch == KEYD_ESCAPE || ch == 'n' || action == MENU_BACKSPACE)
+    return confirmation_no;
+  else
+    return confirmation_null;
+}
+
+static dboolean M_SetupResetVerifyResponder(int ch, int action, event_t *ev)
+{
+  switch (M_EventToConfirmation(ch, action, ev))
+  {
+    case confirmation_yes:
+      if (setup_reset_item && M_ResetSetupItemDefault(setup_reset_item))
+        S_StartVoidSound(g_sfx_menu);
+      else
+        S_StartVoidSound(g_sfx_oof);
+
+      setup_reset_item = NULL;
+      setup_reset_verify = false;
+      break;
+    case confirmation_no:
+      S_StartVoidSound(g_sfx_oof);
+      setup_reset_item = NULL;
+      setup_reset_verify = false;
+      break;
+    case confirmation_null:
+      break;
+  }
+
+  return true;
 }
 
 /////////////////////////////
@@ -3257,13 +3617,14 @@ static void M_DrawInstructionString(int cr, const char *str)
 
 static void M_DrawInstructions(void)
 {
-  menu_flags_t flags = current_setup_menu[set_menu_itemon].m_flags;
+  const setup_menu_t *s = current_setup_menu + set_menu_itemon;
+  menu_flags_t flags = s->m_flags;
 
   // There are different instruction messages depending on whether you
   // are changing an item or just sitting on it.
 
   if (setup_select) {
-    switch (flags & (S_INPUT | S_YESNO | S_WEAP | S_NUM | S_PERC | S_COLOR | S_CRITEM | S_CRBLOOD | S_FILE | S_CHOICE | S_THERMO | S_NAME)) {
+    switch (flags & (S_INPUT | S_YESNO | S_WEAP | S_NUM | S_PERC | S_COLOR | S_CRITEM | S_CRBLOOD | S_CRCHOICE | S_FILE | S_CHOICE | S_THERMO | S_NAME)) {
       case S_INPUT:
         M_DrawInstructionString(cr_info_edit, "Press key or button for this action");
         break;
@@ -3304,6 +3665,8 @@ static void M_DrawInstructions(void)
       M_DrawInstructionString(cr_info_highlight, "Press Enter to Change, Del to Clear");
     else if (flags & S_FUNC)
       M_DrawInstructionString(cr_info_highlight, "Press Enter to Select");
+    else if (M_SetupItemCanReset(s))
+      M_DrawInstructionString(cr_info_highlight, "Press Enter to Change, Reset for default");
     else
       M_DrawInstructionString(cr_info_highlight, "Press Enter to Change");
   }
@@ -3561,7 +3924,7 @@ setup_menu_t* keys_settings[] =
 
 setup_menu_t keys_movement_settings[] =  // Key Binding screen strings
 {
-  { "Input Profile", S_NUM, m_conf, g_all, KB_X, dsda_config_input_profile },
+  { "Input Profile", S_NUM | S_NORESET, m_conf, g_all, KB_X, dsda_config_input_profile },
   EMPTY_LINE,
   { "Forward",       S_INPUT, m_scrn, g_all, KB_X, 0, dsda_input_forward },
   { "Backward",      S_INPUT, m_scrn, g_all, KB_X, 0, dsda_input_backward },
@@ -3634,6 +3997,7 @@ setup_menu_t keys_automap_settings[] =  // Key Binding screen strings
   { "Overlay",          S_INPUT, m_map, g_all, KB_X, 0, dsda_input_map_overlay },
   { "Textured",         S_INPUT, m_map, g_all, KB_X, 0, dsda_input_map_textured },
   { "Highlight By Tag", S_INPUT, m_map, g_all, KB_X, 0, dsda_input_map_highlight_by_tag },
+  { "Mouse Pan",        S_INPUT, m_map, g_all, KB_X, 0, dsda_input_map_mouse_pan },
 
   PREV_PAGE(keys_weapons_settings),
   NEXT_PAGE(keys_game_settings),
@@ -3741,6 +4105,7 @@ setup_menu_t keys_menus_settings[] =
   { "Select Item",  S_INPUT | S_NOCLEAR,  m_menu, g_all, KB_X, 0,  dsda_input_menu_enter },
   { "Exit",         S_INPUT,              m_menu, g_all, KB_X, 0,  dsda_input_menu_escape},
   { "Clear",        S_INPUT,              m_menu, g_all, KB_X, 0,  dsda_input_menu_clear},
+  { "Reset to Default", S_INPUT | S_NYAN, m_menu, g_all, KB_X, 0,  dsda_input_menu_reset},
 
   PREV_PAGE(keys_toggles_settings),
   NEXT_PAGE(keys_inventory_settings),
@@ -4030,6 +4395,7 @@ setup_menu_t auto_options_settings[] =
   EMPTY_LINE,
   { "Grid cell size 8..256, -1 for auto", S_NUM, m_conf, g_all, AU_X, dsda_config_map_grid_size },
   { "Pan speed (1..32)", S_NUM, m_conf, g_all, AU_X, dsda_config_map_pan_speed },
+  { "Mouse pan speed (1..32)", S_NUM, m_conf, g_all, AU_X, dsda_config_map_mouse_pan_speed },
   { "Zoom speed (1..32)", S_NUM, m_conf, g_all, AU_X, dsda_config_map_scroll_speed },
   { "Use mouse wheel for zooming", S_YESNO, m_conf, g_all, AU_X, dsda_config_map_wheel_zoom },
   { "Show Minimap", S_YESNO, m_conf, g_all, AU_X, dsda_config_show_minimap },
@@ -4328,6 +4694,7 @@ setup_menu_t* gen_settings[] =
 
 #define G_X 210
 #define G2_X 220
+#define G3_X 200
 
 static const char *videomodes[] = {
   "Software",
@@ -4393,17 +4760,20 @@ setup_menu_t gen_video_settings[] = {
   FINAL_ENTRY
 };
 
+static const char *soundfont_list[] = { "Internal", NULL };
+
 setup_menu_t gen_audio_settings[] = {
-  { "SFX Volume", S_THERMO, m_conf, g_all, G_X, dsda_config_sfx_volume },
-  { "Music Volume", S_THERMO, m_conf, g_all, G_X, dsda_config_music_volume },
+  { "SFX Volume", S_THERMO, m_conf, g_all, G3_X, dsda_config_sfx_volume },
+  { "Music Volume", S_THERMO, m_conf, g_all, G3_X, dsda_config_music_volume },
   EMPTY_LINE,
-  { "Preferred MIDI player", S_CHOICE | S_STR, m_conf, g_all, G_X, dsda_config_snd_midiplayer, 0, midiplayers },
-  { "Mute When Out of Focus", S_YESNO, m_conf, g_all, G_X, dsda_config_mute_unfocused_window },
+  { "Mute When Out of Focus", S_YESNO, m_conf, g_all, G3_X, dsda_config_mute_unfocused_window },
+  { "SFX For Movement Toggles", S_YESNO, m_conf, g_all, G3_X, dsda_config_movement_toggle_sfx },
+  { "Play SFX For Quicksave", S_YESNO | S_NYAN, m_conf, g_all, G3_X, dsda_config_quicksave_sfx },
   EMPTY_LINE,
-  { "SFX For Movement Toggles", S_YESNO, m_conf, g_all, G_X, dsda_config_movement_toggle_sfx },
-  { "Play SFX For Quicksave", S_YESNO | S_NYAN, m_conf, g_all, G_X, dsda_config_quicksave_sfx },
+  { "Preferred MIDI player", S_CHOICE | S_STR, m_conf, g_all, G3_X, dsda_config_snd_midiplayer, 0, midiplayers },
+  { "Soundfont", S_CHOICE | S_STR | S_TWO_LINE, m_conf, g_all, G3_X, dsda_config_snd_soundfont, 0, soundfont_list, DEPEND(dsda_config_snd_midiplayer, MIDI_FLUIDSYNTH) },
   EMPTY_LINE,
-  FUNC("Advanced Sound", S_CENTER, G_X, M_Sub_AdvAudio),
+  FUNC("Advanced Sound", S_CENTER, G3_X, M_Sub_AdvAudio),
 
   PREV_PAGE(gen_video_settings),
   NEXT_PAGE(gen_device_settings),
@@ -4418,11 +4788,11 @@ setup_menu_t gen_device_settings[] = {
   { "Enable Mouse", S_YESNO, m_conf, g_all, G2_X, dsda_config_use_mouse },
   { "Vertical Mouse Movement", S_YESNO, m_conf, g_all, G2_X, dsda_config_vertmouse, 0, empty_list, DEPEND(dsda_config_use_mouse, true) },
   { "Dbl-Click As Use", S_YESNO, m_conf, g_all, G2_X, dsda_config_mouse_doubleclick_as_use, 0, empty_list, DEPEND(dsda_config_use_mouse, true) },
-  FUNC_DEPEND("Mouse Options", S_CENTER, g_all, G_X, M_Sub_Mouse, dsda_config_use_mouse, true),
+  FUNC_DEPEND("Mouse Options", S_CENTER, g_all, G2_X, M_Sub_Mouse, dsda_config_use_mouse, true),
   EMPTY_LINE,
   { "Enable Gamepad", S_YESNO, m_conf, g_all, G2_X, dsda_config_use_game_controller },
   { "Swap Analogs", S_YESNO, m_conf, g_all, G2_X, dsda_config_swap_analogs, 0, empty_list, DEPEND(dsda_config_use_game_controller, true) },
-  FUNC_DEPEND("Gamepad Options", S_CENTER, g_all, G_X, M_Sub_Gamepad, dsda_config_use_game_controller, true),
+  FUNC_DEPEND("Gamepad Options", S_CENTER, g_all, G2_X, M_Sub_Gamepad, dsda_config_use_game_controller, true),
   EMPTY_LINE,
   { "Enable Freelook", S_YESNO, m_conf, g_all, G2_X, dsda_config_freelook },
   { "Invert Freelook", S_YESNO, m_conf, g_all, G2_X, dsda_config_movement_mouseinvert, 0, empty_list, DEPEND_MULTI(freelook_list) },
@@ -5534,13 +5904,13 @@ setup_menu_t comp_options_settings[] = {
   { "Default compatibility level", S_CHOICE, m_conf, g_all, G2_X, dsda_config_default_complevel, 0, &gen_compstrings[1] },
   EMPTY_LINE,
   TITLE("Game Modifiers", G2_X),
-  { "Pistol Start", S_YESNO, m_conf, g_all, G2_X, dsda_config_pistol_start },
-  { "Respawn Monsters", S_YESNO, m_conf, g_all, G2_X, dsda_config_respawn_monsters },
-  { "Fast Monsters", S_YESNO, m_conf, g_all, G2_X, dsda_config_fast_monsters },
-  { "No Monsters", S_YESNO, m_conf, g_all, G2_X, dsda_config_no_monsters },
-  { "Coop Spawns", S_YESNO, m_conf, g_all, G2_X, dsda_config_coop_spawns },
+  { "Pistol Start", S_YESNO | S_NORESET, m_conf, g_all, G2_X, dsda_config_pistol_start },
+  { "Respawn Monsters", S_YESNO | S_NORESET, m_conf, g_all, G2_X, dsda_config_respawn_monsters },
+  { "Fast Monsters", S_YESNO | S_NORESET, m_conf, g_all, G2_X, dsda_config_fast_monsters },
+  { "No Monsters", S_YESNO | S_NORESET, m_conf, g_all, G2_X, dsda_config_no_monsters },
+  { "Coop Spawns", S_YESNO | S_NORESET, m_conf, g_all, G2_X, dsda_config_coop_spawns },
   EMPTY_LINE,
-  { "Always Pistol Start", S_YESNO, m_conf, g_all, G2_X, dsda_config_always_pistol_start },
+  { "Always Pistol Start", S_YESNO | S_NORESET, m_conf, g_all, G2_X, dsda_config_always_pistol_start },
 
   NEXT_PAGE(comp_emulation_settings),
   FINAL_ENTRY
@@ -5551,7 +5921,7 @@ static const char *over_under_list[] =
   { "Off", "Player", "All things", NULL };
 
 setup_menu_t comp_emulation_settings[] = {
-  { "Limit-Removing", S_YESNO | S_NYAN, m_conf, g_all, CP_X, dsda_config_limit_removing },
+  { "Limit-Removing", S_YESNO | S_NORESET | S_NYAN, m_conf, g_all, CP_X, dsda_config_limit_removing },
   FUNC_DEPEND("Overflows", S_CENTER, g_all, CP_X, M_Sub_Overflows, dsda_config_limit_removing, false),
   EMPTY_LINE,
   TITLE("Mapping Error Fixes", CP_X),
@@ -5721,19 +6091,19 @@ static const char *skill_multiplier[]         = { "Half", "Default", "1.5x", "Do
 #define SK_X2 50
 
 setup_menu_t skill_options_builder[] = {
-  { "Thing Spawns", S_CHOICE, m_conf, g_all, SK_X, dsda_config_skill_spawn_filter, 0, skill_spawn_filter },
-  { "Multiplayer Spawns", S_YESNO, m_conf, g_all, SK_X, dsda_config_skill_coop_spawns },
+  { "Thing Spawns", S_CHOICE | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_spawn_filter, 0, skill_spawn_filter },
+  { "Multiplayer Spawns", S_YESNO | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_coop_spawns },
   EMPTY_LINE,
-  { "Damage to Player", S_CHOICE, m_conf, g_all, SK_X, dsda_config_skill_damage_factor, 0, skill_damage_multiplier },
-  { "Ammo Pickups %", S_CHOICE, m_conf, g_all, SK_X, dsda_config_skill_ammo_factor, 0, skill_ammo_multiplier },
-  { "Auto Use Health", S_YESNO, m_conf, g_all, SK_X, dsda_config_skill_auto_use_health },
+  { "Damage to Player", S_CHOICE | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_damage_factor, 0, skill_damage_multiplier },
+  { "Ammo Pickups %", S_CHOICE | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_ammo_factor, 0, skill_ammo_multiplier },
+  { "Auto Use Health", S_YESNO | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_auto_use_health },
   EMPTY_LINE,
-  { "Respawn Monsters", S_YESNO, m_conf, g_all, SK_X, dsda_config_skill_respawn_monsters },
-  { "Fast Monsters", S_YESNO, m_conf, g_all, SK_X, dsda_config_skill_fast_monsters },
-  { "Aggressive Monsters", S_YESNO, m_conf, g_all, SK_X, dsda_config_skill_aggressive_monsters},
-  { "No Monsters", S_YESNO, m_conf, g_all, SK_X, dsda_config_skill_no_monsters },
+  { "Respawn Monsters", S_YESNO | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_respawn_monsters },
+  { "Fast Monsters", S_YESNO | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_fast_monsters },
+  { "Aggressive Monsters", S_YESNO | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_aggressive_monsters},
+  { "No Monsters", S_YESNO | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_no_monsters },
   EMPTY_LINE,
-  { "Pistol Start", S_YESNO, m_conf, g_all, SK_X, dsda_config_pistol_start },
+  { "Pistol Start", S_YESNO | S_NORESET, m_conf, g_all, SK_X, dsda_config_pistol_start },
   EMPTY_LINE,
   FUNC("Start New Game", S_LEFTJUST, SK_X2, CSNewGame),
   FUNC("Restart Map -- Pistol Start", S_LEFTJUST, SK_X2, CSPistolStart),
@@ -5744,15 +6114,15 @@ setup_menu_t skill_options_builder[] = {
 };
 
 setup_menu_t skill_options_start[] = {
-  { "Respawn Time", S_NUM, m_conf, g_all, SK_X, dsda_config_skill_respawn_time, 0, empty_list, DEPEND(dsda_config_skill_respawn_monsters, true) },
-  { "Slow Spawn-Cube Spitter", S_YESNO, m_conf, g_doom, SK_X, dsda_config_skill_easy_brain },
-  { "Disable Pain States", S_YESNO, m_conf, g_all, SK_X, dsda_config_skill_no_pain },
-  { "Show Automap Keys", S_YESNO, m_conf, g_all, SK_X, dsda_config_skill_easy_key },
+  { "Respawn Time", S_NUM | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_respawn_time, 0, empty_list, DEPEND(dsda_config_skill_respawn_monsters, true) },
+  { "Slow Spawn-Cube Spitter", S_YESNO | S_NORESET, m_conf, g_doom, SK_X, dsda_config_skill_easy_brain },
+  { "Disable Pain States", S_YESNO | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_no_pain },
+  { "Show Automap Keys", S_YESNO | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_easy_key },
   EMPTY_LINE,
-  { "Armor Pickups %", S_CHOICE, m_conf, g_all, SK_X, dsda_config_skill_armor_factor, 0, skill_multiplier },
-  { "Health Pickups %", S_CHOICE, m_conf, g_all, SK_X, dsda_config_skill_health_factor, 0, skill_multiplier },
-  { "Monster Health", S_CHOICE, m_conf, g_all, SK_X, dsda_config_skill_monster_health_factor, 0, skill_multiplier },
-  { "Friend Health", S_CHOICE, m_conf, g_all, SK_X, dsda_config_skill_friend_health_factor, 0, skill_multiplier },
+  { "Armor Pickups %", S_CHOICE | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_armor_factor, 0, skill_multiplier },
+  { "Health Pickups %", S_CHOICE | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_health_factor, 0, skill_multiplier },
+  { "Monster Health", S_CHOICE | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_monster_health_factor, 0, skill_multiplier },
+  { "Friend Health", S_CHOICE | S_NORESET, m_conf, g_all, SK_X, dsda_config_skill_friend_health_factor, 0, skill_multiplier },
 
   PREV_PAGE(skill_options_builder),
   FINAL_ENTRY
@@ -6790,23 +7160,11 @@ void M_DrawCreditsDynamic(void)     // Dynamic Credits
 
   // force drawing an animated background
   V_DrawBackgroundAnimate(aniflat, true);
-  M_DrawTitleImage(91, 6, "NYANLOGO", PROJECT_NAME " v" PROJECT_VERSION, cr_logo);
+  M_DrawTitleImage(91, 6, "NYANLOGO", PROJECT_STRING, cr_logo);
 
   title = "by Andrik 'Arsinikk' Powell";
   M_WriteText(160 - M_StringWidth(title)/2, 27, title, cr_logo);
   M_DrawScreenItems(cred_settings, 48);
-}
-
-static int M_IndexInChoices(const char *str, const char **choices) {
-  int i = 0;
-
-  while (*choices != NULL) {
-    if (!strcmp(str, *choices))
-      return i;
-    i++;
-    choices++;
-  }
-  return 0;
 }
 
 // [FG] support more joystick and mouse buttons
@@ -7390,62 +7748,38 @@ static dboolean M_SetupCommonSelectResponder(int ch, int action, event_t* ev)
 
     if (ptr1->m_flags & S_CHOICE || ptr1->m_flags & S_CRCHOICE) // selection of choices?
     {
-      const char** choice_list = (ptr1->m_flags & S_CRCHOICE) ? color_list : ptr1->selectstrings;
+      const char** choice_list = M_SetupChoiceList(ptr1);
       if (action == MENU_LEFT) {
-        if (ptr1->m_flags & S_STR)
+        if (M_PrevChoiceExists(ptr1))
         {
-          int old_value, value;
+          S_StartVoidSound(g_sfx_menu);
 
-          old_value = M_IndexInChoices(entry_string_index, choice_list);
-          value = old_value - 1;
-          if (value < 0)
-            value = 0;
-          if (old_value != value)
+          if (ptr1->m_flags & S_STR)
           {
-            S_StartVoidSound(g_sfx_menu);
+            int value = M_SetupChoiceValue(ptr1) - 1;
+
             strncpy(entry_string_index, choice_list[value], ENTRY_STRING_BFR_SIZE - 1);
           }
-        }
-        else
-        {
-          int value = choice_value;
-
-          do {
-            --value;
-          } while (value > 0 && choice_list && choice_list[value][0] == '~');
-
-          if (value >= 0 && choice_value != value) {
-            S_StartVoidSound(g_sfx_menu);
-            choice_value = value;
+          else
+          {
+            choice_value = M_StepThroughChoices(choice_list, choice_value - 1, -1);
           }
         }
       }
       else if (action == MENU_RIGHT) {
-        if (ptr1->m_flags & S_STR)
+        if (M_NextChoiceExists(ptr1))
         {
-          int old_value, value;
+          S_StartVoidSound(g_sfx_menu);
 
-          old_value = M_IndexInChoices(entry_string_index, choice_list);
-          value = old_value + 1;
-          if (choice_list[value] == NULL)
-            value = old_value;
-          if (old_value != value)
+          if (ptr1->m_flags & S_STR)
           {
-            S_StartVoidSound(g_sfx_menu);
+            int value = M_SetupChoiceValue(ptr1) + 1;
+
             strncpy(entry_string_index, choice_list[value], ENTRY_STRING_BFR_SIZE - 1);
           }
-        }
-        else
-        {
-          int value = choice_value;
-
-          do {
-            ++value;
-          } while (choice_list && choice_list[value] && choice_list[value][0] == '~');
-
-          if (choice_list[value] && choice_value != value) {
-            S_StartVoidSound(g_sfx_menu);
-            choice_value = value;
+          else
+          {
+            choice_value = M_StepThroughChoices(choice_list, choice_value + 1, 1);
           }
         }
       }
@@ -7457,8 +7791,6 @@ static dboolean M_SetupCommonSelectResponder(int ch, int action, event_t* ev)
         else if (ptr1->m_flags & S_CRCHOICE)
         {
           dsda_UpdateTextColorConfig(ptr1->config_id, choice_value);
-          M_LoadTextColors();
-          ST_LoadTextColors();
         }
         else
         {
@@ -7472,13 +7804,13 @@ static dboolean M_SetupCommonSelectResponder(int ch, int action, event_t* ev)
     if (ptr1->m_flags & S_THERMO)
     {
       if (action == MENU_LEFT) {
-        if (dsda_IntConfig(ptr1->config_id) > dsda_LowerLimitConfig(ptr1->config_id)) {
+        if (M_PrevChoiceExists(ptr1)) {
           dsda_DecrementIntConfig(ptr1->config_id, true);
           S_StartVoidSound(g_sfx_menu);
         }
       }
       else if (action == MENU_RIGHT) {
-        if (dsda_IntConfig(ptr1->config_id) < dsda_UpperLimitConfig(ptr1->config_id)) {
+        if (M_NextChoiceExists(ptr1)) {
           dsda_IncrementIntConfig(ptr1->config_id, true);
           S_StartVoidSound(g_sfx_menu);
         }
@@ -7489,6 +7821,9 @@ static dboolean M_SetupCommonSelectResponder(int ch, int action, event_t* ev)
       return true;
     }
   }
+
+  if (setup_reset_verify)
+    return M_SetupResetVerifyResponder(ch, action, ev);
 
   return false;
 }
@@ -7556,6 +7891,22 @@ static dboolean M_SetupNavigationResponder(int ch, int action, event_t* ev)
     return true;
   }
 
+  if (action == MENU_RESET)
+  {
+    if (M_ItemDisabled(ptr1))
+    {
+      S_StartVoidSound(g_sfx_oof);
+      return true;
+    }
+
+    if (M_SetupItemCanReset(ptr1))
+      M_StartSetupResetVerify(ptr1);
+    else
+      S_StartVoidSound(g_sfx_oof);
+
+    return true;
+  }
+
   if (action == MENU_ENTER)
   {
     menu_flags_t flags = ptr1->m_flags;
@@ -7572,7 +7923,8 @@ static dboolean M_SetupNavigationResponder(int ch, int action, event_t* ev)
     //
     // killough 10/98: use friendlier char-based input buffer
 
-    if (flags & (S_NUM | S_PERC))
+    if (flags & (S_NUM | S_PERC) &&  // number?
+       !(flags & S_THERMO)) // skip thermo
     {
 #ifdef __SWITCH__
       {
@@ -7623,7 +7975,7 @@ static dboolean M_SetupNavigationResponder(int ch, int action, event_t* ev)
     {
       if (flags & S_STR)
       {
-        strncpy(entry_string_index, dsda_StringConfig(ptr1->config_id),
+        strncpy(entry_string_index, M_ChoiceStringConfig(ptr1),
                 ENTRY_STRING_BFR_SIZE - 1);
       }
       else if (flags & S_CRCHOICE)
@@ -8059,22 +8411,6 @@ static dboolean M_InactiveMenuResponder(int ch, int action, event_t* ev)
   return false;
 }
 
-typedef enum {
-  confirmation_null = -1,
-  confirmation_no = 0,
-  confirmation_yes = 1,
-} confirmation_t;
-
-static confirmation_t M_EventToConfirmation(int ch, int action, event_t* ev)
-{
-  if (ch == 'y' || action == MENU_ENTER)
-    return confirmation_yes;
-  else if (ch == ' ' || ch == KEYD_ESCAPE || ch == 'n' || action == MENU_BACKSPACE)
-    return confirmation_no;
-  else
-    return confirmation_null;
-}
-
 static dboolean M_MainNavigationResponder(int ch, int action, event_t* ev)
 {
   if (action == MENU_DOWN)                             // phares 3/7/98
@@ -8412,21 +8748,67 @@ static int M_EventToCharacter(event_t* ev)
   return MENU_NULL;
 }
 
-static int M_CurrentAction(void)
+#define MENU_ANALOG_THRESHOLD 0.7f
+
+static int M_AnalogMenuAction(event_t* ev)
 {
-  if (dsda_InputActivated(dsda_input_menu_left))
+  static int wait;
+  int action;
+  float x, y;
+
+  if (ev->type != ev_menu_analog)
+    return MENU_NULL;
+
+  x = ev->data1.f;
+  y = ev->data2.f;
+
+  x = CLAMP(x, -1.0f, 1.0f);
+  y = CLAMP(y, -1.0f, 1.0f);
+
+  if (x * x > y * y)
+  {
+    if (x < -MENU_ANALOG_THRESHOLD)
+      action = MENU_LEFT;
+    else if (x > MENU_ANALOG_THRESHOLD)
+      action = MENU_RIGHT;
+    else
+      return MENU_NULL;
+  }
+  else
+  {
+    if (y > MENU_ANALOG_THRESHOLD)
+      action = MENU_UP;
+    else if (y < -MENU_ANALOG_THRESHOLD)
+      action = MENU_DOWN;
+    else
+      return MENU_NULL;
+  }
+
+  if (wait >= dsda_GetTick())
+    return MENU_NULL;
+
+  wait = dsda_GetTick() + 5;
+
+  return action;
+}
+
+static int M_CurrentAction(event_t* ev)
+{
+  int analog_action = M_AnalogMenuAction(ev);
+
+  if (dsda_InputActivated(dsda_input_menu_left) || analog_action == MENU_LEFT)
   {
     return MENU_LEFT;
   }
-  else if (dsda_InputActivated(dsda_input_menu_right))
+  else if (dsda_InputActivated(dsda_input_menu_right) || analog_action == MENU_RIGHT)
   {
     return MENU_RIGHT;
   }
-  else if (dsda_InputActivated(dsda_input_menu_up))
+  else if (dsda_InputActivated(dsda_input_menu_up) || analog_action == MENU_UP)
   {
     return MENU_UP;
   }
-  else if (dsda_InputActivated(dsda_input_menu_down))
+  else if (dsda_InputActivated(dsda_input_menu_down) || analog_action == MENU_DOWN)
   {
     return MENU_DOWN;
   }
@@ -8446,6 +8828,10 @@ static int M_CurrentAction(void)
   {
     return MENU_CLEAR;
   }
+  else if (dsda_InputActivated(dsda_input_menu_reset))
+  {
+    return MENU_RESET;
+  }
 
   return MENU_NULL;
 }
@@ -8454,7 +8840,7 @@ dboolean M_Responder(event_t* ev) {
   int ch, action;
 
   ch = M_EventToCharacter(ev);
-  action = M_CurrentAction();
+  action = M_CurrentAction(ev);
 
   if (M_ConsoleOpen() && action != MENU_ESCAPE)
     if (M_ConsoleResponder(ch, action, ev))
@@ -9157,6 +9543,19 @@ static void M_InitCompStr(void)
   }
 }
 
+static void M_InitSoundfontMenu(void)
+{
+  setup_menu_t** page;
+  setup_menu_t* s;
+
+  for (page = gen_settings; *page; page++)
+    for (s = *page; !(s->m_flags & S_END); s++)
+      if (s->config_id == dsda_config_snd_soundfont)
+      {
+        s->selectstrings = I_GetSoundfontList();
+        return;
+      }
+}
 
 //
 // M_Init
@@ -9194,6 +9593,7 @@ void M_Init(void)
   M_ChangeMapMultisamling();
 
   M_ChangeStretch();
+  M_InitSoundfontMenu();
 
   M_ChangeMIDIPlayer();
 }

@@ -121,6 +121,7 @@ void M_ChangeShorttics(void);
 void I_InitSoundParams(void);
 void S_Init(void);
 void M_ChangeMIDIPlayer(void);
+void M_ChangeSoundfont(void);
 void HU_InitCrosshair(void);
 void HU_InitThresholds(void);
 void dsda_InitAutoKeyFrames(void);
@@ -1318,6 +1319,10 @@ dsda_config_t dsda_config[dsda_config_count] = {
   },
   [dsda_config_snd_soundfont] = {
     "snd_soundfont", dsda_config_snd_soundfont,
+    CONF_STRING("internal"), NULL, NOT_STRICT, M_ChangeSoundfont
+  },
+  [dsda_config_snd_soundfont_dir] = {
+    "snd_soundfont_dir", dsda_config_snd_soundfont_dir,
     CONF_STRING("")
   },
   [dsda_config_mus_fluidsynth_chorus] = {
@@ -1844,6 +1849,10 @@ dsda_config_t dsda_config[dsda_config_count] = {
     "automap_follow", dsda_config_automap_follow,
     CONF_BOOL(1), &automap_follow
   },
+  [dsda_config_automap_mouse_pan] = {
+    "automap_mouse_pan", dsda_config_automap_mouse_pan,
+    CONF_BOOL(0), &automap_mouse_pan
+  },
   [dsda_config_automap_grid] = {
     "automap_grid", dsda_config_automap_grid,
     CONF_BOOL(0), &automap_grid
@@ -1854,6 +1863,10 @@ dsda_config_t dsda_config[dsda_config_count] = {
   },
   [dsda_config_map_pan_speed] = {
     "map_pan_speed", dsda_config_map_pan_speed,
+    dsda_config_int, 1, 32, { 16 }, NULL, NOT_STRICT, AM_InitParams
+  },
+  [dsda_config_map_mouse_pan_speed] = {
+    "map_mouse_pan_speed", dsda_config_map_mouse_pan_speed,
     dsda_config_int, 1, 32, { 16 }, NULL, NOT_STRICT, AM_InitParams
   },
   [dsda_config_map_scroll_speed] = {
@@ -2439,6 +2452,14 @@ const char* dsda_UpdateStringConfig(dsda_config_identifier_t id, const char* val
     dsda_config[id].onUpdate();
 
   return dsda_StringConfig(id);
+}
+
+int dsda_DefaultIntConfig(dsda_config_identifier_t id) {
+  return dsda_config[id].default_value.v_int;
+}
+
+const char* dsda_DefaultStringConfig(dsda_config_identifier_t id) {
+  return dsda_config[id].default_value.v_string;
 }
 
 // No callbacks, to avoid recursion cases
