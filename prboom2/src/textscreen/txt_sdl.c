@@ -760,13 +760,6 @@ signed int TXT_GetChar(void)
                 // Quit = escape
                 return 27;
 
-#ifdef __SWITCH__
-            // On Switch there is no keyboard; treat any gamepad button as a keypress.
-            case SDL_CONTROLLERBUTTONDOWN:
-            case SDL_JOYBUTTONDOWN:
-                return 1;
-#endif
-
             case SDL_MOUSEMOTION:
                 if (MouseHasMoved())
                 {

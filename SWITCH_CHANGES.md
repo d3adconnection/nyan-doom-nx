@@ -50,10 +50,10 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
 
 - Includes `<fluidlite.h>` instead of `<fluidsynth.h>`.
 - Skips the `fluid_version()` runtime call (not exported by FluidLite); assumes `sratemin = 8000`.
-- Guards off the SNDFONT lump loader — FluidLite removed `fluid_sfloader_set_callbacks`, so WAD-embedded soundfonts cannot be loaded from memory. Replaced with a warning directing users to place an `.sf2` file in `sdmc:/switch/nyan-doom/`.
+- Guards off `fl_add_sfloader()` — FluidLite removed `fluid_sfloader_set_callbacks`, so the custom WAD sfloader cannot be registered. Two guard sites: before the main soundfont block (`#ifndef __SWITCH__`) and inside the SNDFONT lump fallback (`#ifdef __SWITCH__` warning directing users to place an `.sf2` in `sdmc:/switch/nyan-doom/`).
+- Soundfont file loading uses `I_GetSoundfontFile()` identically to the desktop path — `snd_soundfont` is always an absolute `sdmc:/` path on Switch, which `M_FileExists` (plain `fopen`) resolves directly without needing special handling.
 - Casts `fl_null_logger` to match FluidLite's `char *` log-function signature (vs FluidSynth's `const char *`).
 - Defines `FLUID_OK`/`FLUID_FAILED` and maps `FLUIDLITE_VERSION_*` → `FLUIDSYNTH_VERSION_*` as compat shims.
-- Bypasses `I_FindFile2()` (desktop file search) when loading a soundfont — uses `fopen(snd_soundfont, "rb")` directly since `snd_soundfont` is always an absolute `sdmc:/` path on Switch.
 - Nulls `f_syn`/`f_set` in all failure paths to prevent double-free.
 
 ### `prboom2/src/dsda/configuration.c`
@@ -126,4 +126,4 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
 - Guards the `#include <GL/glu.h>` line behind `!defined(__SWITCH__)`.
 
 ### `prboom2/src/textscreen/txt_sdl.c`
-- In `TXT_GetChar()`, `SDL_CONTROLLERBUTTONDOWN` and `SDL_JOYBUTTONDOWN` events return `1` on Switch. This covers all textscreen UI — the ENDOOM screen, setup/configuration menus, and confirmation dialogs.
+- In `TXT_GetChar()`, upstream's `SDL_CONTROLLERBUTTONDOWN` handler (A=confirm, B=cancel, DPad=arrows) covers Switch correctly since SDL_CONTROLLER_BUTTON_A maps to the physical south/bottom button — the Nintendo confirm button (B). No Switch-specific changes needed.
