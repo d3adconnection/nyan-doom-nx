@@ -50,11 +50,13 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
 
 - Includes `<fluidlite.h>` instead of `<fluidsynth.h>`.
 - Skips the `fluid_version()` runtime call (not exported by FluidLite); assumes `sratemin = 8000`.
-- Guards off `fl_add_sfloader()` — FluidLite removed `fluid_sfloader_set_callbacks`, so the custom WAD sfloader cannot be registered. Two guard sites: before the main soundfont block (`#ifndef __SWITCH__`) and inside the SNDFONT lump fallback (`#ifdef __SWITCH__` warning directing users to place an `.sf2` in `sdmc:/switch/nyan-doom/`).
+- Guards `fl_add_sfloader()` with `#ifndef __SWITCH__` at its definition and all call sites — FluidLite does not implement `fluid_sfloader_set_callbacks`. Three guard sites: the function definition itself, the call before the soundfont block in `fl_init`, and the SNDFONT lump fallback in `fl_init` (replaced with a warning directing users to place an `.sf2` in `sdmc:/switch/nyan-doom/`).
+- Guards the SNDFONT fallback branch in `fl_reload_soundfont` — returns `0` on Switch since WAD-embedded soundfont loading is not supported.
+- Guards `fluid_synth_all_notes_off`/`fluid_synth_all_sounds_off` loop in `fl_reload_soundfont` — not present in FluidLite's API.
 - Soundfont file loading uses `I_GetSoundfontFile()` identically to the desktop path — `snd_soundfont` is always an absolute `sdmc:/` path on Switch, which `M_FileExists` (plain `fopen`) resolves directly without needing special handling.
-- Casts `fl_null_logger` to match FluidLite's `char *` log-function signature (vs FluidSynth's `const char *`).
+- Casts `fl_null_logger` to `fluid_log_function_t` to suppress a function-pointer type mismatch warning introduced by FluidLite's differing log callback signature. Applied unconditionally (not Switch-only) since the cast is valid for both libraries.
 - Defines `FLUID_OK`/`FLUID_FAILED` and maps `FLUIDLITE_VERSION_*` → `FLUIDSYNTH_VERSION_*` as compat shims.
-- Nulls `f_syn`/`f_set` in all failure paths to prevent double-free.
+- Nulls `f_syn`/`f_set` in two `fl_init` failure paths where upstream omits these assignments, preventing a potential double-free on re-init.
 
 ### `prboom2/src/dsda/configuration.c`
 - Switch-specific compile-time defaults via `#ifdef __SWITCH__` in the `dsda_config[]` array:
@@ -66,7 +68,7 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
   - `mus_opl_gain`: `100` (upstream: `50`)
 
 ### `prboom2/src/dsda/configuration.h`
-- Exports `dsda_HackStringConfig()` — sets and persists a string config value without firing its `onUpdate` callback. Used by `I_SwitchDetectSoundfont()` to default `snd_midiplayer` before the WAD system is ready; a full `dsda_UpdateStringConfig` call would fire `M_ChangeMIDIPlayer`, which calls `S_RestartMusic` → `W_LumpByNum` before WADs are loaded, causing a crash.
+- Adds an explanatory comment above `dsda_HackStringConfig()` documenting that it fires no `onUpdate` callback and is safe to call before subsystems are initialised. The function itself is upstream-provided; `I_SwitchDetectSoundfont()` uses it to default `snd_midiplayer` before the WAD system is ready, avoiding the `M_ChangeMIDIPlayer` → `S_RestartMusic` → `W_LumpByNum` crash path.
 
 ### `prboom2/src/SDL/i_main.c`
 - Calls `I_SwitchInit()` at the very start of `main()`.
@@ -106,7 +108,7 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
 - `M_ChangeMIDIPlayer()`: portmidi selection branch guarded with `#ifndef __SWITCH__` to prevent a null-pointer dereference if an old config file has `snd_midiplayer portmidi`.
 
 ### `prboom2/src/s_sound.c`
-- `S_ChangeMusInfoMusic()`: early-return guard tightened from `if (music->lumpnum == lumpnum)` to `if (music->lumpnum == lumpnum && mus_playing)`. After `S_StopMusic()`, `mus_playing` is `NULL` but the lumpnum field retains its old value, so the original guard fired and silently skipped the restart. This caused silence after switching MIDI players on any map using MUSINFO/MAPINFO music.
+- `S_ChangeMusInfoMusic()`: early-return guard tightened from `if (music->lumpnum == lumpnum)` to `if (music->lumpnum == lumpnum && mus_playing)`. After `S_StopMusic()`, `mus_playing` is `NULL` but the lumpnum field retains its old value, so the original guard fired and silently skipped the restart. This caused silence after switching MIDI players on any map using MUSINFO/MAPINFO music. **Note:** this fix is not Switch-specific (no `#ifdef` guard) — it is a general correctness fix carried in this fork.
 
 ### `prboom2/src/dsda/endoom.c`
 - Calls `SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT)` before the ENDOOM wait loop to drain any button-press events that were queued during the quit dialog, preventing an instant-exit.
