@@ -124,6 +124,3 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
 
 ### `prboom2/src/gl_opengl.h`
 - Guards the `#include <GL/glu.h>` line behind `!defined(__SWITCH__)`.
-
-### `prboom2/src/textscreen/txt_sdl.c`
-- In `TXT_GetChar()`, upstream's `SDL_CONTROLLERBUTTONDOWN` handler (A=confirm, B=cancel, DPad=arrows) covers Switch correctly since SDL_CONTROLLER_BUTTON_A maps to the physical south/bottom button — the Nintendo confirm button (B). No Switch-specific changes needed.
