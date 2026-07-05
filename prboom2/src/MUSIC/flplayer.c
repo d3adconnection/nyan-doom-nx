@@ -243,6 +243,7 @@ static void fl_null_logger(int level, const char *message, void *data) {
   // no op
 }
 
+#ifndef __SWITCH__
 static void fl_add_sfloader(void)
 {
   if (!f_sfloader_added)
@@ -256,6 +257,7 @@ static void fl_add_sfloader(void)
     f_sfloader_added = true;
   }
 }
+#endif
 
 static int fl_init (int samplerate)
 {
@@ -463,7 +465,9 @@ int fl_reload_soundfont(void)
   int new_font;
   const char *filename;
   const char *snd_soundfont;
+#ifndef __SWITCH__
   int lumpnum;
+#endif
 
   if (!f_syn)
     return 0;
@@ -477,6 +481,7 @@ int fl_reload_soundfont(void)
   }
   else
   {
+#ifndef __SWITCH__
     lumpnum = W_CheckNumForName("SNDFONT");
     if (lumpnum == LUMP_NOT_FOUND)
       return 0;
@@ -484,16 +489,21 @@ int fl_reload_soundfont(void)
     fl_add_sfloader();
     f_soundfont_lump = lumpnum;
     new_font = fluid_synth_sfload(f_syn, "SNDFONT", 1);
+#else
+    return 0;
+#endif
   }
 
   if (new_font == FLUID_FAILED)
     return 0;
 
+#ifndef __SWITCH__
   for (int channel = 0; channel < 16; channel++)
   {
     fluid_synth_all_notes_off(f_syn, channel);
     fluid_synth_all_sounds_off(f_syn, channel);
   }
+#endif
 
   if (old_font != FLUID_FAILED && old_font != new_font)
     fluid_synth_sfunload(f_syn, old_font, 0);
