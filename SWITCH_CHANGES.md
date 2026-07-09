@@ -107,9 +107,6 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
 - `midiplayers[]`: null-terminated after `"opl"` on Switch so PortMIDI does not appear in the Preferred MIDI Player menu (PortMIDI is not available on Switch).
 - `M_ChangeMIDIPlayer()`: portmidi selection branch guarded with `#ifndef __SWITCH__` to prevent a null-pointer dereference if an old config file has `snd_midiplayer portmidi`.
 
-### `prboom2/src/s_sound.c`
-- `S_ChangeMusInfoMusic()`: early-return guard tightened from `if (music->lumpnum == lumpnum)` to `if (music->lumpnum == lumpnum && mus_playing)`. After `S_StopMusic()`, `mus_playing` is `NULL` but the lumpnum field retains its old value, so the original guard fired and silently skipped the restart. This caused silence after switching MIDI players on any map using MUSINFO/MAPINFO music. **Note:** this fix is not Switch-specific (no `#ifdef` guard) — it is a general correctness fix carried in this fork.
-
 ### `prboom2/src/dsda/endoom.c`
 - Calls `SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT)` before the ENDOOM wait loop to drain any button-press events that were queued during the quit dialog, preventing an instant-exit.
 
