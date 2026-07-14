@@ -4122,7 +4122,7 @@ setup_menu_t keys_automap_settings[] =  // Key Binding screen strings
   { "Overlay",          S_INPUT, m_map, g_all, KB_X, 0, dsda_input_map_overlay },
   { "Textured",         S_INPUT, m_map, g_all, KB_X, 0, dsda_input_map_textured },
   { "Highlight By Tag", S_INPUT, m_map, g_all, KB_X, 0, dsda_input_map_highlight_by_tag },
-  { "Mouse Pan",        S_INPUT, m_map, g_all, KB_X, 0, dsda_input_map_mouse_pan },
+  { "Mouse Pan",        S_INPUT|S_NYAN, m_map, g_all, KB_X, 0, dsda_input_map_mouse_pan },
 
   PREV_PAGE(keys_weapons_settings),
   NEXT_PAGE(keys_game_settings),
@@ -4436,7 +4436,7 @@ setup_menu_t weap_pref_settings[] =  // Weapons Settings screen
   TITLE("Gameplay", WP_X),
   { "Boom Weapon Auto Switch", S_YESNO, m_conf, g_all, WP_X, dsda_config_switch_when_ammo_runs_out },
   { "Auto Switch on Pickup", S_YESNO, m_conf, g_all, WP_X, dsda_config_switch_weapon_on_pickup },
-  { "Switch Speed", S_CHOICE | S_NYAN, m_conf, g_all, WP_X, dsda_config_switch_speed, 0, weap_switch_speed_list },
+  { "Weapon Switch Speed", S_CHOICE | S_NYAN, m_conf, g_all, WP_X, dsda_config_switch_speed, 0, weap_switch_speed_list },
   { "Berserk Fist Over Chainsaw", S_YESNO | S_NYAN, m_conf, g_doom, WP_X, dsda_config_switch_berserk_preferred },
   { "Direct Vertical Aiming", S_YESNO | S_NYAN, m_conf, g_all, WP_X, dsda_config_disable_horiz_autoaim },
   EMPTY_LINE,
@@ -4556,7 +4556,6 @@ static const char *map_things_appearance_list[] =
 
 static const char *map_player_arrow_list[] = { "Default", "Modern", "Doom", "Raven", NULL };
 static const char *map_marker_style_list[] = { "Classic", "Line", NULL };
-static const char *automap_background_list[] = { "Off", "Default", "On", NULL };
 static const char *automap_linesize_list[] = { "Auto", "1x", "2x", "3x", "4x", "5x", "6x", NULL };
 
 setup_menu_t auto_appearance_settings[] =
@@ -4565,7 +4564,7 @@ setup_menu_t auto_appearance_settings[] =
   { "Automap Markers", S_CHOICE | S_NYAN, m_conf, g_all, AA_X, dsda_config_map_marker_style, 0, map_marker_style_list },
   FUNC("Thing Appearance", S_CENTER | S_NYAN, AA_X, M_Sub_AutoMapThings),
   EMPTY_LINE,
-  { "Automap background", S_CHOICE | S_NYAN, m_conf, g_all, AA_X, dsda_config_automap_background, 0, automap_background_list },
+  { "Automap background", S_YESNO | S_NYAN, m_conf, g_all, AA_X, dsda_config_automap_background },
   { "Background shade", S_PERC | S_NYAN, m_conf, g_all, AA_X, dsda_config_automap_background_shade, 0, empty_list, EXCLUDE(dsda_config_automap_background, false) },
   { "Parallex Effect", S_YESNO | S_NYAN, m_conf, g_all, AA_X, dsda_config_automap_parallax, 0, empty_list, EXCLUDE(dsda_config_automap_background, false) },
   EMPTY_LINE,
@@ -4907,7 +4906,7 @@ setup_menu_t gen_audio_settings[] = {
   { "Play SFX For Quicksave", S_YESNO | S_NYAN, m_conf, g_all, G3_X, dsda_config_quicksave_sfx },
   EMPTY_LINE,
   { "Preferred MIDI player", S_CHOICE | S_STR, m_conf, g_all, G3_X, dsda_config_snd_midiplayer, 0, midiplayers },
-  { "Soundfont", S_CHOICE | S_STR | S_TWO_LINE, m_conf, g_all, G3_X, dsda_config_snd_soundfont, 0, soundfont_list, DEPEND(dsda_config_snd_midiplayer, MIDI_FLUIDSYNTH) },
+  { "Soundfont", S_CHOICE | S_STR | S_TWO_LINE | S_NYAN, m_conf, g_all, G3_X, dsda_config_snd_soundfont, 0, soundfont_list, DEPEND(dsda_config_snd_midiplayer, MIDI_FLUIDSYNTH) },
   EMPTY_LINE,
   FUNC("Advanced Sound", S_CENTER, G3_X, M_Sub_AdvAudio),
 
@@ -5343,8 +5342,8 @@ setup_menu_t display_hud_settings[] =  // Demos Settings screen
 {
   TITLE("Messages", G_X),
   { "Show Messages", S_YESNO, m_conf, g_all, G_X, dsda_config_show_messages },
-  { "Colorize Messages", S_YESNO, m_conf, g_all, G_X, dsda_config_colorize_messages, 0, empty_list, DEPEND(dsda_config_show_messages, true) },
-  { "Fade Messages", S_YESNO, m_conf, g_all, G_X, dsda_config_fade_messages, 0, empty_list, DEPEND(dsda_config_show_messages, true)  },
+  { "Colorize Messages", S_YESNO | S_NYAN, m_conf, g_all, G_X, dsda_config_colorize_messages, 0, empty_list, DEPEND(dsda_config_show_messages, true) },
+  { "Fade Messages", S_YESNO | S_NYAN, m_conf, g_all, G_X, dsda_config_fade_messages, 0, empty_list, DEPEND(dsda_config_show_messages, true)  },
   FUNC("Announcements", S_CENTER | S_NYAN, G_X, M_Sub_Announce),
   FUNC("Obituaries", S_CENTER | S_NYAN, G_X, M_Sub_Obituary),
   EMPTY_LINE,
