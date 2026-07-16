@@ -5,7 +5,6 @@
  *
  *  Implements Switch-specific startup/shutdown: sockets and working-directory
  *  setup so that config files, savegames and WADs land in SWITCH_DATA_DIR.
- *  Soundfonts are auto-detected from the SD card at first launch.
  *
  *-----------------------------------------------------------------------------
  */
@@ -17,15 +16,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <strings.h>
-#include <dirent.h>
 #include <unistd.h>
 
 #include "SDL.h"
 
 #include "i_switch.h"
 #include "lprintf.h"
-#include "dsda/configuration.h"
 
 static int switch_initialized = 0;
 
@@ -54,78 +50,6 @@ void I_SwitchInit(void)
   chdir(SWITCH_DATA_DIR);
 
   switch_initialized = 1;
-}
-
-// Scan the data directory for a .sf2 soundfont and configure snd_soundfont /
-// snd_midiplayer when snd_soundfont is blank.  Returns 1 if the config was
-// changed and should be saved, 0 otherwise.
-int I_SwitchDetectSoundfont(void)
-{
-  const char *sf;
-  const char *player;
-  DIR *d;
-  struct dirent *ent;
-  char found_path[512];
-  int found = 0;
-  int changed = 0;
-
-  sf = dsda_StringConfig(dsda_config_snd_soundfont);
-
-  // If a soundfont path is configured but the file no longer exists, clear it
-  // so the scan below can find a replacement (e.g. user swapped the file).
-  if (sf && sf[0] && access(sf, F_OK) != 0)
-  {
-    lprintf(LO_INFO, "I_SwitchDetectSoundfont: %s missing, clearing\n", sf);
-    dsda_UpdateStringConfig(dsda_config_snd_soundfont, "", true);
-    sf = "";
-    changed = 1;
-  }
-
-  // Only scan when snd_soundfont is blank.
-  if (sf && sf[0])
-    return 0;
-
-  // Scan SWITCH_DATA_DIR for the first .sf2 soundfont file (any filename).
-  // Use "." since I_SwitchInit already chdired to SWITCH_DATA_DIR.
-  d = opendir(".");
-  if (!d)
-    return changed;
-
-  while ((ent = readdir(d)) != NULL) {
-    size_t len = strlen(ent->d_name);
-    if (len > 4 && strcasecmp(ent->d_name + len - 4, ".sf2") == 0) {
-      snprintf(found_path, sizeof(found_path), SWITCH_DATA_DIR "/%s", ent->d_name);
-      found = 1;
-      break;
-    }
-  }
-  closedir(d);
-
-  if (!found)
-  {
-    // No soundfont available; use OPL so MIDI works out of the box.
-    // Use dsda_HackStringConfig (no callback) because this runs before WADs
-    // are loaded; dsda_UpdateStringConfig would fire M_ChangeMIDIPlayer which
-    // calls S_RestartMusic -> W_LumpByNum before the WAD system is ready.
-    player = dsda_StringConfig(dsda_config_snd_midiplayer);
-    if (!player || !player[0])
-    {
-      dsda_HackStringConfig(dsda_config_snd_midiplayer, "opl", true);
-      changed = 1;
-    }
-    return changed;
-  }
-
-  dsda_UpdateStringConfig(dsda_config_snd_soundfont, found_path, true);
-  lprintf(LO_INFO, "I_SwitchDetectSoundfont: auto-detected %s\n", found_path);
-
-  // Soundfont found; enable FluidSynth if the player hasn't been chosen.
-  // Same caveat: use HackStringConfig to avoid the premature callback.
-  player = dsda_StringConfig(dsda_config_snd_midiplayer);
-  if (!player || !player[0])
-    dsda_HackStringConfig(dsda_config_snd_midiplayer, "fluidsynth", true);
-
-  return 1;
 }
 
 // ---------------------------------------------------------------------------

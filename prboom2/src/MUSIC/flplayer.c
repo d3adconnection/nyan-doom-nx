@@ -407,7 +407,7 @@ static int fl_init (int samplerate)
 #ifdef __SWITCH__
       // FluidLite does not support the fluid_sfloader custom-callback API.
       // On Switch the user provides a file via snd_soundfont; SNDFONT lumps are not supported.
-      lprintf(LO_WARN, "fl_init: SNDFONT lump not supported on Switch; place soundfont.sf2 in %s\n",
+      lprintf(LO_WARN, "fl_init: SNDFONT lump not supported on Switch; place soundfont.sf2 in %s/soundfonts/\n",
               SWITCH_DATA_DIR);
 #else
       checked_f_font = "SNDFONT";

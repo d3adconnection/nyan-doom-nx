@@ -1339,11 +1339,7 @@ dsda_config_t dsda_config[dsda_config_count] = {
   },
   [dsda_config_mus_fluidsynth_gain] = {
     "mus_fluidsynth_gain", dsda_config_mus_fluidsynth_gain,
-#ifdef __SWITCH__
-    dsda_config_int, 0, 1000, { 100 }
-#else
     dsda_config_int, 0, 1000, { 50 }
-#endif
   },
   [dsda_config_mus_fluidsynth_chorus_depth] = {
     "mus_fluidsynth_chorus_depth", dsda_config_mus_fluidsynth_chorus_depth,
@@ -1371,11 +1367,7 @@ dsda_config_t dsda_config[dsda_config_count] = {
   },
   [dsda_config_mus_opl_gain] = {
     "mus_opl_gain", dsda_config_mus_opl_gain,
-#ifdef __SWITCH__
-    dsda_config_int, 0, 1000, { 100 }
-#else
     dsda_config_int, 0, 1000, { 50 }
-#endif
   },
   [dsda_config_mus_opl_opl3mode] = {
     "mus_opl_opl3mode", dsda_config_mus_opl_opl3mode,

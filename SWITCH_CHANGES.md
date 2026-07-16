@@ -13,11 +13,6 @@ CMake toolchain file for devkitA64 cross-compilation. Includes `$DEVKITPRO/cmake
 All Switch platform glue, called from `i_main.c`:
 - `I_SwitchInit()` — initialises BSD sockets (nxlink debug), creates `sdmc:/switch/nyan-doom/` and `chdir`s into it so all relative paths (config, saves, WADs) land on the SD card.
 - `I_SwitchShutdown()` — tears down sockets.
-- `I_SwitchDetectSoundfont()` — called after `M_LoadDefaults()`; manages soundfont auto-configuration on every launch:
-  - If `snd_soundfont` is set but the file no longer exists, clears it (allows a replacement to be picked up).
-  - If `snd_soundfont` is blank and a `.sf2` file is present in the data directory, sets `snd_soundfont` to its path and, if `snd_midiplayer` is blank, sets it to `"fluidsynth"`.
-  - If `snd_midiplayer` is blank and no soundfont found, sets it to `"opl"`.
-  - Returns `1` if the config was changed (caller saves); `0` if nothing was done.
 - `I_SwitchGetNumericInput(current_value, buf, buf_size)` — opens the system numpad (`SwkbdType_NumPad`) prefilled with the current integer value. Returns 1 on confirm (result in `buf`), 0 on cancel or failure. Wraps the call in `appletLockExit`/`appletUnlockExit` and flushes SDL events on return.
 - `I_SwitchGetStringInput(current, buf, buf_size)` — same but opens the full QWERTY keyboard (`SwkbdConfigMakePresetDefault`) prefilled with the current string.
 
@@ -50,10 +45,9 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
 
 - Includes `<fluidlite.h>` instead of `<fluidsynth.h>`.
 - Skips the `fluid_version()` runtime call (not exported by FluidLite); assumes `sratemin = 8000`.
-- Guards `fl_add_sfloader()` with `#ifndef __SWITCH__` at its definition and all call sites — FluidLite does not implement `fluid_sfloader_set_callbacks`. Three guard sites: the function definition itself, the call before the soundfont block in `fl_init`, and the SNDFONT lump fallback in `fl_init` (replaced with a warning directing users to place an `.sf2` in `sdmc:/switch/nyan-doom/`).
+- Guards `fl_add_sfloader()` with `#ifndef __SWITCH__` at its definition and all call sites — FluidLite does not implement `fluid_sfloader_set_callbacks`. Three guard sites: the function definition itself, the call before the soundfont block in `fl_init`, and the SNDFONT lump fallback in `fl_init` (replaced with a warning directing users to place an `.sf2` in `sdmc:/switch/nyan-doom/soundfonts/`).
 - Guards the SNDFONT fallback branch in `fl_reload_soundfont` — returns `0` on Switch since WAD-embedded soundfont loading is not supported.
 - Guards `fluid_synth_all_notes_off`/`fluid_synth_all_sounds_off` loop in `fl_reload_soundfont` — not present in FluidLite's API.
-- Soundfont file loading uses `I_GetSoundfontFile()` identically to the desktop path — `snd_soundfont` is always an absolute `sdmc:/` path on Switch, which `M_FileExists` (plain `fopen`) resolves directly without needing special handling.
 - Casts `fl_null_logger` to `fluid_log_function_t` to suppress a function-pointer type mismatch warning introduced by FluidLite's differing log callback signature. Applied unconditionally (not Switch-only) since the cast is valid for both libraries.
 - Defines `FLUID_OK`/`FLUID_FAILED` and maps `FLUIDLITE_VERSION_*` → `FLUIDSYNTH_VERSION_*` as compat shims.
 - Nulls `f_syn`/`f_set` in two `fl_init` failure paths where upstream omits these assignments, preventing a potential double-free on re-init.
@@ -64,15 +58,9 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
   - `use_fullscreen`: `1` (upstream: `0`)
   - `render_vsync`: `1` (upstream: `0`)
   - `use_game_controller`: `1` (upstream: `0`)
-  - `mus_fluidsynth_gain`: `100` (upstream: `50`)
-  - `mus_opl_gain`: `100` (upstream: `50`)
-
-### `prboom2/src/dsda/configuration.h`
-- Adds an explanatory comment above `dsda_HackStringConfig()` documenting that it fires no `onUpdate` callback and is safe to call before subsystems are initialised. The function itself is upstream-provided; `I_SwitchDetectSoundfont()` uses it to default `snd_midiplayer` before the WAD system is ready, avoiding the `M_ChangeMIDIPlayer` → `S_RestartMusic` → `W_LumpByNum` crash path.
 
 ### `prboom2/src/SDL/i_main.c`
 - Calls `I_SwitchInit()` at the very start of `main()`.
-- Calls `I_SwitchDetectSoundfont()` immediately after `M_LoadDefaults()`; calls `M_SaveDefaults()` only if it returns `1` (config was changed)
 
 ### `prboom2/src/SDL/i_system.c`
 - `I_GetXDGDataHome()`, `I_GetXDGDataDirs()`, and `I_ConfigDir()` all return `SWITCH_DATA_DIR` (`"sdmc:/switch/nyan-doom"`) on Switch so configs, saves, and asset lookups are rooted on the SD card.

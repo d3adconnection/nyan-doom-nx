@@ -302,13 +302,6 @@ int main(int argc, char **argv)
   M_LoadDefaults();              // load before initing other systems
   lprintf(LO_DEBUG, "\n");
 
-#ifdef __SWITCH__
-  // Clears stale snd_soundfont paths, auto-detects a .sf2 in the data
-  // directory, and ensures snd_midiplayer is not blank.
-  if (I_SwitchDetectSoundfont())
-    M_SaveDefaults();
-#endif
-
   /* Version info */
   PrintVer();
 
