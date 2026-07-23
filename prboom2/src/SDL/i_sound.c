@@ -1285,10 +1285,24 @@ static dboolean I_ReloadSoundfont(void)
 
   for (i = 0; music_players[i]; i++)
   {
-    if (music_players[i] == &fl_player && music_player_was_init[i])
+    if (music_players[i] == &fl_player)
     {
       SDL_LockMutex(musmutex);
-      result = fl_reload_soundfont();
+      if (music_player_was_init[i])
+      {
+        result = fl_reload_soundfont();
+      }
+#ifdef __SWITCH__
+      else
+      {
+        // On Switch, fl_player fails at startup when no soundfont is configured
+        // because FluidLite does not support the SNDFONT lump fallback that
+        // other platforms rely on. Attempt a fresh init now that the user has
+        // selected a file soundfont from the menu.
+        music_player_was_init[i] = fl_player.init(snd_samplerate);
+        result = music_player_was_init[i] != 0;
+      }
+#endif
       SDL_UnlockMutex(musmutex);
       break;
     }

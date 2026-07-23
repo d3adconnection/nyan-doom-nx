@@ -94,6 +94,7 @@ FluidSynth depends on GLib (a large GNOME utility library) which is not availabl
 ### `prboom2/src/SDL/i_sound.c`
 - `midiplayers[]`: null-terminated after `"opl"` on Switch so PortMIDI does not appear in the Preferred MIDI Player menu (PortMIDI is not available on Switch).
 - `M_ChangeMIDIPlayer()`: portmidi selection branch guarded with `#ifndef __SWITCH__` to prevent a null-pointer dereference if an old config file has `snd_midiplayer portmidi`.
+- `I_ReloadSoundfont()`: adds an `#ifdef __SWITCH__` else-branch that re-initialises `fl_player` when it previously failed to start. On other platforms `fl_player` always initialises via the SNDFONT lump in `nyan-doom.wad`; on Switch that lump path is blocked (FluidLite limitation), so `fl_player` fails at startup when no file soundfont is configured. Without this branch the soundfont selection in the Options menu silently reverts to "Internal".
 
 ### `prboom2/src/dsda/endoom.c`
 - Calls `SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT)` before the ENDOOM wait loop to drain any button-press events that were queued during the quit dialog, preventing an instant-exit.
