@@ -421,7 +421,7 @@ extern int dsda_ExHudTranslucency(void);
 // CPhipps - function to plot a pixel
 
 // V_PlotPixel
-typedef void (*V_PlotPixel_f)(int,int,int,byte);
+typedef void (*V_PlotPixel_f)(int,int,byte);
 extern V_PlotPixel_f V_PlotPixel;
 
 typedef struct
@@ -444,7 +444,7 @@ typedef void (*V_DrawLineWu_f)(fline_t* fl, int color);
 extern V_DrawLineWu_f V_DrawLineWu;
 
 // V_PlotPixelWu
-typedef void (*V_PlotPixelWu_f)(int scrn, int x, int y, byte color, int weight);
+typedef void (*V_PlotPixelWu_f)(int x, int y, byte color, int weight);
 extern V_PlotPixelWu_f V_PlotPixelWu;
 
 void V_AllocScreen(screeninfo_t *scrn);
@@ -470,6 +470,7 @@ void V_ClearBorderbox(const char* lump, int screenfill);
 void V_GetWideRect(int *x, int *y, int *w, int *h, enum patch_translation_e flags);
 
 int V_BestColor(const unsigned char *palette, int r, int g, int b);
+void V_ZDoomGetColor(const char *string, int *r, int *g, int *b);
 
 // [FG] colored blood and gibs
 int V_BloodColor(int blood);
