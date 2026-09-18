@@ -252,6 +252,9 @@ void D_PostEvent(event_t *ev)
     }
   }
 
+  if (heretic && gamestate == GS_FINALE && F_Responder(ev))
+    dsda_InputFlushTick(); // When under Heretic's Underwater Palette, make menu event invisible
+  else
   if (M_Responder(ev))
     dsda_InputFlushTick(); // If the menu used the event, make it invisible
   else
@@ -2265,7 +2268,7 @@ static void D_DoomMainSetup(void)
 
   PostProcessDehacked();
   dsda_AppendZDoomMobjInfo();
-  dsda_ApplyDefaultMapFormat();
+  dsda_ApplyBinaryMapFormat();
 
   deh_InitNyanTweaks();
 
@@ -2275,7 +2278,7 @@ static void D_DoomMainSetup(void)
   lprintf(LO_INFO, "\n"); // Separator after file loading
 
   V_UpdateColorTranslation(); //jff 4/24/98 load color translation lumps
-  V_UpdateShadeColormap();    // Update dark overlay colormap
+  V_UpdateColormaps();        // Update overlay / gray invuln
 
   //jff 9/3/98 use logical output routine
   lprintf(LO_DEBUG, "M_Init: Init miscellaneous info.\n");

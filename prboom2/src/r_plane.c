@@ -65,6 +65,7 @@
 #include "dsda/map_format.h"
 #include "dsda/render_stats.h"
 #include "dsda/configuration.h"
+#include "dsda/settings.h"
 
 int Sky1Texture;
 int Sky2Texture;
@@ -156,7 +157,7 @@ void R_InitPlanesRes(void)
   yslope = Z_Calloc(1, SCREENHEIGHT * sizeof(*yslope));
   distscale = Z_Calloc(1, SCREENWIDTH * sizeof(*distscale));
 
-  xtoskyangle = dsda_IntConfig(dsda_config_render_linearsky) ? linearskyangle : xtoviewangle;
+  xtoskyangle = (dsda_IntConfig(dsda_config_render_sky_projection) == 1) ? linearskyangle : xtoviewangle;
 }
 
 void R_InitVisplanesRes(void)
@@ -183,7 +184,7 @@ void R_InitPlanes (void)
 // Refresh Sky
 void dsda_RefreshSky (void)
 {
-  xtoskyangle = dsda_IntConfig(dsda_config_render_linearsky) ? linearskyangle : xtoviewangle;
+  xtoskyangle = (dsda_IntConfig(dsda_config_render_sky_projection) == 1) ? linearskyangle : xtoviewangle;
 }
 
 //
@@ -635,6 +636,7 @@ static void R_DoDrawPlane(visplane_t *pl)
       int texture, texture2 = 0;
       const rpatch_t *tex_patch, *tex_patch2;
       angle_t an, an2, flip;
+      fixed_t base_iscale;
 
       // killough 10/98: allow skies to come from sidedefs.
       // Allows scrolling and/or animated skies, as well as
@@ -722,7 +724,7 @@ static void R_DoDrawPlane(visplane_t *pl)
        * Because of this hack, sky is not affected by INVUL inverse mapping.
        * Until Boom fixed this. Compat option added in MBF. */
 
-      if (comp[comp_skymap] || !(dcvars.colormap = fixedcolormap))
+      if (!dsda_ApplyInvulnColormapToSky() || !(dcvars.colormap = fixedcolormap))
         dcvars.colormap = fullcolormap;          // killough 3/20/98
 
       //dcvars.texturemid = skytexturemid;
@@ -764,8 +766,14 @@ static void R_DoDrawPlane(visplane_t *pl)
           dcvars.texheight = patch->height;
           dcvars.texturemid = 200 << FRACBITS;
           dcvars.iscale = (200 << FRACBITS) / SCREENHEIGHT;
+          base_iscale = dcvars.iscale;
 
           for (x = pl->minx; (dcvars.x = x) <= pl->maxx; x++)
+          {
+            // [Nugget] Cylindrical Sky Projection
+            if (dsda_IntConfig(dsda_config_render_sky_projection) == 2)
+              dcvars.iscale = FixedMul(base_iscale, finecosine[xtoviewangle[x] >> ANGLETOFINESHIFT]);
+
             if ((dcvars.yl = pl->top[x]) != SHRT_MAX && dcvars.yl <= (dcvars.yh = pl->bottom[x])) // dropoff overflow
             {
               dcvars.source = R_GetPatchColumn(patch, (an + xtoskyangle[x]) >> ANGLETOSKYSHIFT)->pixels;
@@ -774,6 +782,7 @@ static void R_DoDrawPlane(visplane_t *pl)
               if (DoubleSky) dcvars.source2 = R_GetPatchColumn(patch2, (an2 + xtoskyangle[x]) >> ANGLETOSKYSHIFT)->pixels;
               colfunc(&dcvars);
             }
+          }
 
           return;
         }
@@ -796,8 +805,15 @@ static void R_DoDrawPlane(visplane_t *pl)
         dcvars.texheight = skyheight;
       }
 
+      base_iscale = dcvars.iscale;
+
       // killough 10/98: Use sky scrolling offset, and possibly flip picture
       for (x = pl->minx; (dcvars.x = x) <= pl->maxx; x++)
+      {
+        // [Nugget] Cylindrical Sky Projection
+        if (dsda_IntConfig(dsda_config_render_sky_projection) == 2)
+          dcvars.iscale = FixedMul(base_iscale, finecosine[xtoviewangle[x] >> ANGLETOFINESHIFT]);
+
         if ((dcvars.yl = pl->top[x]) != SHRT_MAX && dcvars.yl <= (dcvars.yh = pl->bottom[x])) // dropoff overflow
         {
           dcvars.source = R_GetTextureColumn(tex_patch, ((an + xtoskyangle[x])^flip) >> ANGLETOSKYSHIFT, false);
@@ -806,6 +822,7 @@ static void R_DoDrawPlane(visplane_t *pl)
           if (DoubleSky) dcvars.source2 = R_GetTextureColumn(tex_patch2, ((an2 + xtoskyangle[x])^flip) >> ANGLETOSKYSHIFT, false);
           colfunc(&dcvars);
         }
+      }
     }
     else {     // regular flat
 

@@ -993,6 +993,12 @@ static void cheat_cycle_mobj(mobj_t **last_mobj, int *last_count, int flags, int
 
       mobj = (mobj_t *) th;
 
+      if (mobj->intflags & MIF_SPAWNED_BY_ICON ||
+          mobj->intflags & MIF_SPAWNED_BY_DSPARIL)
+      {
+        continue;
+      }
+
       if ((!alive || mobj->health > 0) && mobj->flags & flags)
       {
         found = true;

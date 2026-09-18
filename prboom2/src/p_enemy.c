@@ -1148,7 +1148,7 @@ void A_KeenDie(mobj_t* mo)
           return;                           // other Keen not dead
       }
 
-  junk.tag = 666;
+  junk.special_args[0] = 666;
   EV_DoDoor(&junk,openDoor);
 }
 
@@ -2763,14 +2763,14 @@ void A_BossDeath(mobj_t *mo)
     {
       if (mo->flags2 & MF2_MAP07BOSS1)
       {
-        junk.tag = 666;
+        junk.special_args[0] = 666;
         EV_DoFloor(&junk,lowerFloorToLowest);
         return;
       }
 
       if (mo->flags2 & MF2_MAP07BOSS2)
       {
-        junk.tag = 667;
+        junk.special_args[0] = 667;
         EV_DoFloor(&junk,raiseToTexture);
         return;
       }
@@ -2781,7 +2781,7 @@ void A_BossDeath(mobj_t *mo)
     switch(gameepisode)
     {
       case 1:
-        junk.tag = 666;
+        junk.special_args[0] = 666;
         EV_DoFloor(&junk, lowerFloorToLowest);
         return;
         break;
@@ -2790,13 +2790,13 @@ void A_BossDeath(mobj_t *mo)
         switch(gamemap)
         {
           case 6:
-            junk.tag = 666;
+            junk.special_args[0] = 666;
             EV_DoDoor(&junk, blazeOpen);
             return;
             break;
 
           case 8:
-            junk.tag = 666;
+            junk.special_args[0] = 666;
             EV_DoFloor(&junk, lowerFloorToLowest);
             return;
             break;
@@ -3213,7 +3213,7 @@ void A_LineEffect(mobj_t *mo)
   junk.special = (short)mo->state->misc1;
   if (!junk.special)
     return;
-  junk.tag = (short)mo->state->misc2;
+  junk.special_args[0] = (short)mo->state->misc2;
   if (!P_UseSpecialLine(mo, &junk, 0, false))
     map_format.cross_special_line(&junk, 0, mo, false);
   mo->state->misc1 = junk.special;
@@ -3945,6 +3945,7 @@ dboolean P_UpdateChicken(mobj_t * actor, int tics)
     oldChicken = *actor;
     P_SetMobjState(actor, HERETIC_S_FREETARGMOBJ);
     mo = P_SpawnMobj(x, y, z, moType);
+    mo->intflags |= oldChicken.intflags & MIF_SPAWNED_BY_DSPARIL;
     dsda_WatchUnMorph(mo);
     if (P_TestMobjLocation(mo) == false)
     {                           // Didn't fit
@@ -4154,6 +4155,7 @@ void A_SorcererRise(mobj_t * actor)
 
     actor->flags &= ~MF_SOLID;
     mo = P_SpawnMobj(actor->x, actor->y, actor->z, HERETIC_MT_SORCERER2);
+    dsda_WatchDSparilPhaseSpawn(mo);
     P_SetMobjState(mo, HERETIC_S_SOR2_RISE1);
     mo->angle = actor->angle;
     P_SetTarget(&mo->target, actor->target);
@@ -4262,13 +4264,13 @@ void A_GenWizard(mobj_t * actor)
 
     mo = P_SpawnMobj(actor->x, actor->y,
                      actor->z - mobjinfo[HERETIC_MT_WIZARD].height / 2, HERETIC_MT_WIZARD);
-    dsda_WatchDSparilSpawn(mo);
     if (P_TestMobjLocation(mo) == false)
     {                           // Didn't fit
         dsda_WatchFailedSpawn(mo);
         P_RemoveMobj(mo);
         return;
     }
+    dsda_WatchDSparilSpawn(mo);
     actor->momx = actor->momy = actor->momz = 0;
     P_SetMobjState(actor, mobjinfo[actor->type].deathstate);
     actor->flags &= ~MF_MISSILE;
@@ -5094,7 +5096,7 @@ void Heretic_A_BossDeath(mobj_t * actor)
     {                           // Kill any remaining monsters
         P_Massacre();
     }
-    dummyLine.tag = 666;
+    dummyLine.special_args[0] = 666;
     EV_DoFloor(&dummyLine, lowerFloor);
 }
 

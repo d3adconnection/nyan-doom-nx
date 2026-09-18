@@ -72,6 +72,8 @@ dboolean dsda_EffectPalette(void);
 dboolean dsda_PainPaletteReduced(void);
 dboolean dsda_PickupPaletteReduced(void);
 dboolean dsda_EffectPaletteReduced(void);
+dboolean dsda_ApplyInvulnColormapToSky(void);
+dboolean dsda_GrayInvulnColormap(void);
 dboolean dsda_RenderWipeScreen(void);
 dboolean dsda_WipeAtFullSpeed(void);
 int dsda_WipeScreenSpeed(void);
@@ -109,6 +111,7 @@ void dsda_SkipNextWipe(void);
 dboolean dsda_PendingSkipWipe(void);
 dboolean dsda_SkipWipe(void);
 dboolean dsda_MultipleAreaMaps(void);
+dboolean dsda_QuickArtifactUse(void);
 dboolean dsda_SimplerPuzzleUse(void);
 dboolean dsda_FullAutomapHud(void);
 

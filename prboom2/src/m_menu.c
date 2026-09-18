@@ -220,7 +220,6 @@ static dboolean sub_color_active = false;
 
 extern const char* g_menu_flat;
 extern int g_menu_save_page_size;
-extern int g_menu_font_spacing;
 
 #define QUICKSAVESLOT 0
 
@@ -348,7 +347,8 @@ static void M_DrawHelp (void);                                     // phares 5/0
 static void M_DrawAd(void);
 
 static void M_DrawSaveLoadBorder(int x,int y,dboolean selected);
-static void M_DrawThermo(int x,int y,int thermWidth,int thermRange,int thermDot,dboolean selected,dboolean small_thermo);
+static void M_DrawThermo(int x,int y,int thermWidth,int thermRange,int thermDot,int color);
+static void M_DrawThermoSmall(int x, int y, int thermWidth, int thermRange, int thermDot, const setup_menu_t *setup_item);
 static void M_DrawEmptyCell(menu_t *menu,int item);
 static void M_DrawSelCell(menu_t *menu,int item);
 static void M_WriteText(int x, int y, const char *string, int cm);
@@ -538,18 +538,6 @@ static const dsda_font_t *menu_font;
 static void M_LoadMenuFont(void)
 {
   menu_font = &hud_font;
-}
-
-//
-// Highlight option
-//
-
-int M_Highlight(int override)
-{
-  if (override || dsda_IntConfig(nyan_config_extra_menu_highlights))
-    return CR_LIGHTEN;
-
-  return 0;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -991,7 +979,7 @@ static void M_DeleteSaveGame(int slot)
 static dboolean M_FileSlotEnabled(int menu, int item)
 {
   if (menu == MN_LOAD)
-    return LoadMenue[item].status;
+    return LoadMenue[item].status == 1;
 
   if (menu == MN_SAVE)
     return current_page != 0;
@@ -999,14 +987,51 @@ static dboolean M_FileSlotEnabled(int menu, int item)
   return false;
 }
 
+dboolean M_MenuItemHighlighted(int item)
+{
+  // Keyboard highlight is optional
+  if (item == itemOn && dsda_IntConfig(nyan_config_extra_menu_highlights))
+    return true;
+
+  return false;
+}
+
 dboolean M_FileBoxSelected(int menu, int item)
 {
-  return item == itemOn && M_FileSlotEnabled(menu, item);
+  // Disabled slots never highlight
+  if (!M_FileSlotEnabled(menu, item))
+    return false;
+
+  // Mouse / keyboard highlight
+  return M_MenuItemHighlighted(item);
 }
 
 int M_FileTextColor(int menu, int item)
 {
   return M_FileSlotEnabled(menu, item) ? CR_DEFAULT : CR_DARKEN;
+}
+
+//
+// Highlight functions
+//
+
+dboolean M_CurrentSelectedItem(int item)
+{
+  return itemOn == item;
+}
+
+int M_HighlightColor(dboolean highlight, int color)
+{
+  if (highlight &&
+      color >= CR_DEFAULT && color < CR_HUD_LIMIT)
+    return CR_LIGHTEN + color;
+
+  return color;
+}
+
+int M_AddColorFlag(int color)
+{
+  return color != CR_DEFAULT ? VPT_COLOR : VPT_NONE;
 }
 
 //
@@ -1025,8 +1050,11 @@ static void M_DrawLoad(void)
   // CPhipps - patch drawing updated
   V_DrawMenuNamePatch(72 ,LOADGRAPHIC_Y, "M_LOADG", CR_DEFAULT, VPT_STRETCH);
   for (i = 0 ; i < load_end ; i++) {
-    M_DrawSaveLoadBorder(LoadDef.x,LoadDef.y+LINEHEIGHT*i,M_FileBoxSelected(MN_LOAD,i));
-    M_WriteText(LoadDef.x,LoadDef.y+LINEHEIGHT*i,savegamestrings[i],M_FileTextColor(MN_LOAD,i));
+    dboolean selected   = M_FileBoxSelected(MN_LOAD, i);
+    int textcolor       = M_HighlightColor(selected, M_FileTextColor(MN_LOAD, i));
+
+    M_DrawSaveLoadBorder(LoadDef.x,LoadDef.y+LINEHEIGHT*i,selected);
+    M_WriteText(LoadDef.x,LoadDef.y+LINEHEIGHT*i,savegamestrings[i],textcolor);
   }
 
   M_DrawTabs(saves_pages, 5, 145);
@@ -1042,14 +1070,8 @@ static void M_DrawLoad(void)
 static void M_DrawSaveLoadBorder(int x,int y,dboolean selected)
 {
   int i;
-  int color = CR_DEFAULT;
-  int flags = VPT_STRETCH;
-
-  if (selected)
-    color += M_Highlight(false);
-
-  if (color != CR_DEFAULT)
-    flags |= VPT_COLOR;
+  int color = M_HighlightColor(selected, CR_DEFAULT);
+  int flags = VPT_STRETCH | M_AddColorFlag(color);
 
   V_DrawMenuNamePatch(x-8, y+7, "M_LSLEFT", color, flags);
 
@@ -1091,9 +1113,9 @@ void M_LoadSelect(int choice)
 
 static char *forced_loadgame_message;
 
-static void M_VerifyForcedLoadGame(int ch)
+static void M_VerifyForcedLoadGame(int confirmed)
 {
-  if (ch=='y')
+  if (confirmed) // "y" for yes
     G_ForcedLoadGame();
   Z_Free(forced_loadgame_message);    // free the message Z_Strdup()'ed below
   M_ClearMenus();
@@ -1103,6 +1125,11 @@ void M_ForcedLoadGame(const char *msg)
 {
   forced_loadgame_message = Z_Strdup(msg); // Z_Free()'d above
   M_StartMessage(forced_loadgame_message, M_VerifyForcedLoadGame, true);
+}
+
+void M_ShowLegacySaveMessage(void)
+{
+  M_StartMessage("This save uses an incompatible save format.\n\n"PRESSKEY, NULL, false);
 }
 
 //
@@ -1275,8 +1302,11 @@ static void M_DrawSave(void)
   V_DrawMenuNamePatch(72, LOADGRAPHIC_Y, "M_SAVEG", CR_DEFAULT, VPT_STRETCH);
   for (i = 0 ; i < load_end ; i++)
     {
-    M_DrawSaveLoadBorder(SaveDef.x,SaveDef.y+LINEHEIGHT*i,M_FileBoxSelected(MN_SAVE,i));
-    M_WriteText(SaveDef.x,SaveDef.y+LINEHEIGHT*i,savegamestrings[i],M_FileTextColor(MN_SAVE,i));
+    dboolean selected   = M_FileBoxSelected(MN_SAVE, i);
+    int textcolor       = M_HighlightColor(selected, M_FileTextColor(MN_SAVE, i));
+
+    M_DrawSaveLoadBorder(SaveDef.x,SaveDef.y+LINEHEIGHT*i,selected);
+    M_WriteText(SaveDef.x,SaveDef.y+LINEHEIGHT*i,savegamestrings[i],textcolor);
     }
 
   M_DrawTabs(saves_pages, 5, 145);
@@ -1360,6 +1390,15 @@ void M_SaveGame (int choice)
       "you can't save the game\n"
       "under these conditions!\n\n"PRESSKEY,
       NULL, false); // killough 5/26/98: not externalized
+    return;
+  }
+
+  if (dsda_DisableSaveAfterDeath())
+  {
+    M_StartMessage(
+      "you can't save the game\n"
+      "when you're dead!\n\n"PRESSKEY,
+      NULL, false);
     return;
   }
 
@@ -1552,11 +1591,6 @@ menu_t SoundDef =
 // Change Sfx & Music volumes
 //
 
-dboolean M_CurrentSelectedItem(int item)
-{
-  return itemOn == item;
-}
-
 static void M_DrawSound(void)
 {
   char num[4];
@@ -1566,12 +1600,12 @@ static void M_DrawSound(void)
   // CPhipps - patch drawing updated
   V_DrawMenuNamePatch(60, 38, "M_SVOL", CR_DEFAULT, VPT_STRETCH);
 
-  M_DrawThermo(SoundDef.x,SoundDef.y+LINEHEIGHT*(sfx_vol+1),16,16,snd_SfxVolume,M_CurrentSelectedItem(sfx_vol),false);
+  M_DrawThermoBig(SoundDef.x,SoundDef.y+LINEHEIGHT*(sfx_vol+1),16,16,snd_SfxVolume,sfx_vol);
   snprintf(num, sizeof(num), "%3d", snd_SfxVolume);
   strcpy(menu_buffer, num);
   M_DrawMenuString(SoundDef.x + 150, SoundDef.y+LINEHEIGHT*(sfx_vol+1) + 3, cr_value_edit);
 
-  M_DrawThermo(SoundDef.x,SoundDef.y+LINEHEIGHT*(music_vol+1),16,16,snd_MusicVolume,M_CurrentSelectedItem(music_vol),false);
+  M_DrawThermoBig(SoundDef.x,SoundDef.y+LINEHEIGHT*(music_vol+1),16,16,snd_MusicVolume,music_vol);
   snprintf(num, sizeof(num), "%3d", snd_MusicVolume);
   strcpy(menu_buffer, num);
   M_DrawMenuString(SoundDef.x + 150, SoundDef.y+LINEHEIGHT*(music_vol+1) + 3, cr_value_edit);
@@ -1639,6 +1673,11 @@ static void M_QuickSave(void)
       "you can't save the game\n"
       "under these conditions!\n\n"PRESSKEY,
       NULL, false); // killough 5/26/98: not externalized
+    return;
+  }
+
+  if (dsda_DisableSaveAfterDeath())
+  {
     return;
   }
 
@@ -2545,7 +2584,7 @@ static dboolean M_DoomDisabled(const setup_menu_t* s)
     static const int options_disable_false[] =
     { dsda_config_hide_horns, dsda_config_skill_auto_use_health,
       dsda_config_artifact_descriptions, dsda_config_hexen_skip_ethereal_travel,
-      dsda_config_hexen_simpler_puzzle_use,
+      dsda_config_hexen_simpler_puzzle_use, dsda_config_quick_artifact_use,
 
       // status widget stuff
       nyan_config_ex_status_tome, nyan_config_ex_status_morph,
@@ -3463,7 +3502,7 @@ static void M_DrawSetting(const setup_menu_t* s, int y)
 
     value = dsda_IntConfig(s->config_id);
 
-    M_DrawThermo(x, y, 8, M_ThermoDisplayRange(s), M_ThermoDisplayValue(s), selected, true);
+    M_DrawThermoSmall(x, y, 8, M_ThermoDisplayRange(s), M_ThermoDisplayValue(s), s);
     M_FormatMenuSetting(s, value);
 
     M_ChoiceBlinkingArrowRight(s, x + 80, y + 3, color);
@@ -4945,7 +4984,7 @@ setup_menu_t gen_video_settings[] = {
   { "Aspect Ratio", S_CHOICE, m_conf, g_all, G_X, dsda_config_render_aspect, 0, render_aspects_list },
   { "Fullscreen Video mode", S_YESNO, m_conf, g_all, G_X, dsda_config_use_fullscreen },
   { "Exclusive Fullscreen", S_YESNO, m_conf, g_all, G_X, dsda_config_exclusive_fullscreen },
-  { "Field of View", S_THERMO | S_NYAN, m_conf, g_all, G_X, dsda_config_render_fov },
+  //{ "Field of View", S_THERMO | S_NYAN, m_conf, g_all, G_X, dsda_config_render_fov },
   { "Zoom FOV", S_THERMO | S_NYAN, m_conf, g_all, G_X, dsda_config_zoom_fov },
   EMPTY_LINE,
   TITLE("FPS", G_X),
@@ -4998,7 +5037,6 @@ setup_menu_t gen_device_settings[] = {
   EMPTY_LINE,
   { "Enable Freelook", S_YESNO, m_conf, g_all, G2_X, dsda_config_freelook },
   { "Freelook AutoAim", S_YESNO | S_NYAN, m_conf, g_all, G2_X, dsda_config_freelook_autoaim, 0, empty_list, DEPEND_MULTI(freelook_list) },
-  { "Freelook Enhanced Flying", S_YESNO | S_NYAN, m_conf, g_all, G2_X, dsda_config_freelook_enhanced_flying, 0, empty_list, DEPEND_MULTI(freelook_list) },
 
   PREV_PAGE(gen_audio_settings),
   NEXT_PAGE(gen_gamesim_settings),
@@ -5009,10 +5047,13 @@ static const char* artifact_desc_list[] = { "Off", "Full", "Names", "Description
 
 setup_menu_t gen_gamesim_settings[] = {
   { "Death Use Action", S_CHOICE, m_conf, g_all, G2_X, dsda_config_death_use_action, 0, death_use_strings },
+  { "Disable Saving After Death", S_YESNO | S_NYAN, m_conf, g_all, G2_X, dsda_config_disable_saving_after_death },
   { "Rare Player Gib Death", S_YESNO | S_NYAN, m_conf, g_doom, G2_X, nyan_config_skullpop_easter_egg },
   { "Randomly Mirrored Corpses", S_YESNO | S_NYAN, m_conf, g_all, G2_X, nyan_config_flip_corpses },
-  { "Weapon Carousel", S_YESNO | S_NYAN, m_conf, g_doom, G2_X, dsda_config_weapon_carousel },
+  { "Classic Flight", S_YESNO | S_NYAN, m_conf, g_all, G2_X, dsda_config_classic_flight },
+  { "Weapon Carousel", S_YESNO | S_NYAN, m_conf, g_all, G2_X, dsda_config_weapon_carousel },
   { "Artifact Descriptions", S_CHOICE | S_NYAN, m_conf, g_raven, G2_X, dsda_config_artifact_descriptions, 0, artifact_desc_list },
+  { "Quick Artifact Use", S_YESNO | S_NYAN, m_conf, g_raven, G2_X, dsda_config_quick_artifact_use },
   { "Skip Ethereal Travel", S_YESNO | S_NYAN, m_conf, g_hexen, G2_X, dsda_config_hexen_skip_ethereal_travel },
   { "Simpler Puzzle Piece Use", S_YESNO | S_NYAN, m_conf, g_hexen, G2_X, dsda_config_hexen_simpler_puzzle_use },
   EMPTY_LINE,
@@ -5325,11 +5366,13 @@ static const char* menu_background_list[] = { "Off", "Dark", "Texture", NULL };
 static const char* palette_list[] = { "Off", "Default", NULL };
 static const char* palette_reduced_list[] = { "Off", "Default", "Reduced", NULL };
 static const char* swirling_flat_list[] = { "Off", "Smart", "All", NULL };
+static const char* sky_projection_list[] = { "Vanilla", "Linear", "Cylindrical", NULL };
+static const char* invuln_sky_list[] = { "Default", "MBF", "Vanilla", NULL };
 
 setup_menu_t display_options_settings[] = {
   { "Screen Wipe Effect", S_CHOICE | S_NYAN, m_conf, g_doom, G_X, dsda_config_render_wipescreen, 0, wipe_screen_list },
-  { "Linear Sky Scrolling", S_YESNO, m_conf, g_all, G_X, dsda_config_render_linearsky, DEPEND_SW },
   { "Stretch Short Skies", S_YESNO, m_conf, g_doom, G_X, dsda_config_render_stretchsky, DEPEND_SW },
+  { "Sky Projection", S_CHOICE, m_conf, g_all, G_X, dsda_config_render_sky_projection, 0, sky_projection_list, DEPEND(dsda_config_videomode, SOFTWARE_MODE) },
   { "Quake Intensity", S_PERC, m_conf, g_all, G_X, dsda_config_quake_intensity },
   { "Fake Contrast", S_CHOICE, m_conf, g_all, G_X, dsda_config_fake_contrast_mode, 0, fake_contrast_list },
   { "Swirling Flats", S_CHOICE | S_NYAN, m_conf, g_all, G_X, dsda_config_swirling_flats, 0, swirling_flat_list },
@@ -5341,6 +5384,8 @@ setup_menu_t display_options_settings[] = {
   { "Palette On Pickup", S_CHOICE | S_NYAN, m_conf, g_all, G_X, dsda_config_palette_onbonus, 0, palette_reduced_list },
   { "Palette On Powers", S_CHOICE | S_NYAN, m_conf, g_all, G_X, dsda_config_palette_onpowers, 0, palette_list },
   { "Palette On Effects", S_CHOICE | S_NYAN, m_conf, g_all, G_X, dsda_config_palette_oneffects, 0, palette_reduced_list },
+  { "Invuln Sky Behavior", S_CHOICE, m_conf, g_all, G_X, dsda_config_invulnerability_sky, 0, invuln_sky_list },
+  { "Gray Invulnerability", S_YESNO | S_NYAN, m_conf, g_doom, G_X, dsda_config_gray_invulnerability },
   EMPTY_LINE,
   { "Menu Background", S_CHOICE, m_conf, g_all, G_X, dsda_config_menu_background, 0, menu_background_list },
 
@@ -6522,6 +6567,7 @@ setup_menu_t demos_tas_settings[] =
   { "Strict Mode", S_YESNO, m_conf, g_all, DM_X, dsda_config_strict_mode },
   EMPTY_LINE,
   { "Wipe At Full Speed", S_YESNO, m_conf, g_all, DM_X, dsda_config_wipe_at_full_speed },
+  { "Allow Wipe For Heretic", S_YESNO | S_NYAN, m_conf, g_all, DM_X, dsda_config_allow_wipescreen_raven_demos },
   { "Show Command Display", S_YESNO, m_conf, g_all, DM_X, dsda_config_command_display },
   { "Command History", S_NUM, m_conf, g_all, DM_X, dsda_config_command_history_size },
   { "Hide Empty Commands", S_YESNO, m_conf, g_all, DM_X, dsda_config_hide_empty_commands },
@@ -7353,7 +7399,7 @@ static void M_DrawString(int cx, int cy, int color, const char* ch)
     V_DrawMenuNumPatch(cx, cy, menu_font->font[c].lumpnum, color, VPT_STRETCH | VPT_COLOR);
     // The screen is cramped, so trim one unit from each
     // character so they butt up against each other.
-    cx += w + g_menu_font_spacing;
+    cx += w + menu_font->menu_spacing;
   }
 }
 
@@ -7381,9 +7427,9 @@ static int M_GetPixelWidth(const char* ch)
       continue;
       }
     len += menu_font->font[c].width;
-    len += g_menu_font_spacing;
+    len += menu_font->menu_spacing;
   }
-  len -= g_menu_font_spacing; // replace what you took away on the last char only
+  len -= menu_font->menu_spacing; // replace what you took away on the last char only
   return len;
 }
 
@@ -7404,7 +7450,7 @@ int M_GetPixelWidthCount(const char* str, int start_index, int count)
       width += menu_font->font[c].width;
 
     if (i + 1 < count && str[i + 1])
-      width += g_menu_font_spacing;
+      width += menu_font->menu_spacing;
   }
 
   return width;
@@ -8530,7 +8576,7 @@ static dboolean M_InactiveMenuResponder(int ch, int action, event_t* ev)
   // Toggle extra brightness
   if (dsda_InputActivated(dsda_input_extra_brightness) && !dsda_StrictMode())
   {
-    dsda_CycleConfig(dsda_config_extra_level_brightness, true);
+    int extra_brightness = dsda_CycleConfig(dsda_config_extra_level_brightness, true);
     dsda_AddMessage(extra_brightness == 0 ? "Extra Brightness Off" :
                     extra_brightness == 1 ? "Extra Brightness Level 1" :
                     extra_brightness == 2 ? "Extra Brightness Level 2" :
@@ -9208,10 +9254,6 @@ dboolean M_Responder(event_t* ev) {
   if (dsda_InputActivated(dsda_input_screenshot))
     I_QueueScreenshot();
 
-  // Cancel ESC command when under Heretic's Underwater Palette
-  if (heretic && F_BlockingInput())
-    return false;
-
   if (!menuactive)
   {
     if (M_InactiveMenuResponder(ch, action, ev))
@@ -9435,6 +9477,26 @@ static dboolean M_OptionalLumpMissing(const menuitem_t *item)
   return item->name[0] && !W_LumpNameExists(item->name);
 }
 
+static dboolean M_MenuHasMissingRequiredLumps(const menu_t *menu)
+{
+  int i;
+
+  if (!menu)
+    return false;
+
+  for (i = 0; i < menu->numitems; i++)
+  {
+    const menuitem_t *item = &menu->menuitems[i];
+
+    if (item->status != -1 &&
+        !(item->flags & MENUF_OPTLUMP) &&
+        (!item->name[0] || !W_LumpNameExists(item->name)))
+      return true;
+  }
+
+  return false;
+}
+
 //
 // M_Drawer
 // Called after the view has been rendered,
@@ -9509,38 +9571,20 @@ void M_Drawer (void)
     x = currentMenu->x;
     y = currentMenu->y;
     max = currentMenu->numitems;
-    lumps_missing = 0;
+    lumps_missing = M_MenuHasMissingRequiredLumps(currentMenu);
 
     for (i = 0; i < max; i++)
     {
-      dboolean optional_lump = currentMenu->menuitems[i].flags & MENUF_OPTLUMP;
+      const menuitem_t *item = &currentMenu->menuitems[i];
+      int color = M_HighlightColor(M_MenuItemHighlighted(i), item->color);
+      int flags = VPT_STRETCH | M_AddColorFlag(color);
 
-      if (currentMenu->menuitems[i].status != -1 && !optional_lump &&
-          (!currentMenu->menuitems[i].name[0] || !W_LumpNameExists(currentMenu->menuitems[i].name)))
-        ++lumps_missing;
-    }
+      if (!lumps_missing && item->name[0] && !M_OptionalLumpMissing(item))
+        V_DrawMenuNamePatch(x, y, item->name, color, flags);
 
-    for (i = 0; i < max; i++)
-    {
-      dboolean optional_lump_missing = M_OptionalLumpMissing(&currentMenu->menuitems[i]);
-      dboolean selected = (i == itemOn);
-      const char *alttext = currentMenu->menuitems[i].alttext;
-      int color = currentMenu->menuitems[i].color;
-      int flags = VPT_STRETCH;
-
-      if (selected)
-        color += M_Highlight(false);
-
-      if (color != CR_DEFAULT)
-        flags |= VPT_COLOR; 
-
-      if (!lumps_missing && currentMenu->menuitems[i].name[0] && !optional_lump_missing)
-        V_DrawMenuNamePatch(x, y, currentMenu->menuitems[i].name,
-                        color, flags);
-
-      else if (alttext)
-        M_WriteText(x, y + 8 - (M_StringHeight(alttext) / 2),
-                    alttext, color);
+      else if (item->alttext)
+        M_WriteText(x, y + 8 - (M_StringHeight(item->alttext) / 2),
+                    item->alttext, color);
 
       y += LINEHEIGHT;
     }
@@ -9674,22 +9718,18 @@ static void M_StopMessage(void)
 // proff/nicolas 09/20/98 -- changed for hi-res
 // CPhipps - patch drawing updated
 //
-static void M_DrawThermo(int x, int y, int thermWidth, int thermRange, int thermDot, dboolean selected, dboolean small_thermo )
+static void M_DrawThermo(int x, int y, int thermWidth, int thermRange, int thermDot, int color)
 {
   int xx;
   int i;
   int dot_offset;
+  int flags;
 
-  int color = CR_DEFAULT;
-  int flags = VPT_STRETCH;
+  if (raven) RETURN(MN_DrawSlider(x, y, thermWidth, thermRange, thermDot, color));
 
-  if (raven) RETURN(MN_DrawSlider(x, y, thermWidth, thermRange, thermDot, selected, small_thermo));
-
-  if (selected)
-    color += M_Highlight(small_thermo);
-
-  if (color != CR_DEFAULT)
-    flags |= VPT_COLOR;
+  // [AR] We check both if the item is selected and highlight
+  // to include the label on the sound screen
+  flags = VPT_STRETCH | M_AddColorFlag(color);
 
   xx = x;
   V_DrawMenuNamePatch(xx, y, "M_THERML", color, flags);
@@ -9708,6 +9748,22 @@ static void M_DrawThermo(int x, int y, int thermWidth, int thermRange, int therm
 
   dot_offset = thermDot * (thermWidth * 8 - 8) / (thermRange - 1);
   V_DrawNamePatch(x + 8 + dot_offset, y, "M_THERMO", color, flags);
+}
+
+static void M_DrawThermoSmall(int x, int y, int thermWidth, int thermRange, int thermDot, const setup_menu_t *setup_item)
+{
+  dboolean selected = setup_item->m_flags & S_HILITE;
+  int color = M_ItemDisabled(setup_item) ? CR_DARKEN : M_HighlightColor(selected, CR_DEFAULT);
+
+  M_DrawThermo(x, y, thermWidth, thermRange, thermDot, color );
+}
+
+void M_DrawThermoBig(int x, int y, int thermWidth, int thermRange, int thermDot, int menu_item)
+{
+  dboolean highlight = (itemOn == menu_item) && M_MenuItemHighlighted(menu_item);
+  int color = M_HighlightColor(highlight, CR_DEFAULT);
+
+  M_DrawThermo(x, y, thermWidth, thermRange, thermDot, color );
 }
 
 //
@@ -9779,9 +9835,7 @@ static void M_WriteText (int x,int y, const char* string, int cm)
   cx = x;
   cy = y;
 
-  flags = VPT_STRETCH;
-  if (cm != CR_DEFAULT)
-    flags |= VPT_COLOR;
+  flags = VPT_STRETCH | M_AddColorFlag(cm);
 
   while(1) {
     c = *ch++;
@@ -9824,9 +9878,7 @@ static void M_DrawTitleImage(int x, int y, const char *patch, const char *text, 
 
   if (lumpnum != LUMP_NOT_FOUND)
   {
-    int flags = VPT_STRETCH;
-    if (cm != CR_DEFAULT)
-    flags |= VPT_COLOR;
+    int flags = VPT_STRETCH | M_AddColorFlag(cm);
     V_DrawMenuNumPatch(x, y, lumpnum, cm, flags);
   }
   else

@@ -995,7 +995,10 @@ static void R_ProcessFOV(void)
     fov_zoom_active = false;
 
   if (fov_zoom_active)
-    target_fov = (float)dsda_IntConfig(dsda_config_zoom_fov);
+  {
+    int zoom_fov = dsda_IntConfig(dsda_config_zoom_fov);
+    target_fov = (float)zoom_fov;
+  }
 
   if (base_fov != old_base_fov)
   {
@@ -1088,6 +1091,7 @@ static void R_SetupFrame (player_t *player)
   int i, cm;
 
   int FocalTangent = finetangent[FINEANGLES/4 + FieldOfView/2];
+  int extra_brightness = dsda_IntConfig(dsda_config_extra_level_brightness);
 
   viewplayer = player;
 
@@ -1146,8 +1150,11 @@ static void R_SetupFrame (player_t *player)
       // killough 3/20/98: localize scalelightfixed (readability/optimization)
       static const lighttable_t *scalelightfixed[MAXLIGHTSCALE];
 
-      fixedcolormap = fullcolormap   // killough 3/20/98: use fullcolormap
-        + player->fixedcolormap*256*sizeof(lighttable_t);
+      if (player->fixedcolormap == INVERSECOLORMAP && dsda_GrayInvulnColormap())
+        fixedcolormap = V_GrayInvulnColormap();
+      else
+        fixedcolormap = fullcolormap   // killough 3/20/98: use fullcolormap
+          + player->fixedcolormap*256*sizeof(lighttable_t);
 
       walllights = scalelightfixed;
 

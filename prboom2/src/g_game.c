@@ -543,7 +543,11 @@ void G_BuildTiccmd(ticcmd_t* cmd)
       {
         plr->readyArtifact = plr->inventory[plr->inv_ptr].type;
         inventory = false;
-        cmd->arti = 0;
+
+        if (dsda_QuickArtifactUse())
+          cmd->arti |= plr->readyArtifact & AFLAG_MASK;
+        else
+          cmd->arti = 0;
       }
       else
       {
@@ -745,8 +749,7 @@ void G_BuildTiccmd(ticcmd_t* cmd)
 
   if (dsda_InputActive(dsda_input_use) || dsda_InputTickActivated(dsda_input_use))
   {
-    if (!dsda_DeathUseNothingInDemo())
-      cmd->buttons |= BT_USE;
+    cmd->buttons |= BT_USE;
     // clear double clicks if hit use button
     dclicks = 0;
   }
@@ -885,8 +888,7 @@ void G_BuildTiccmd(ticcmd_t* cmd)
         dclicks++;
       if (dclicks == 2)
         {
-          if (!dsda_DeathUseNothingInDemo())
-            cmd->buttons |= BT_USE;
+          cmd->buttons |= BT_USE;
           dclicks = 0;
         }
       else
@@ -908,8 +910,7 @@ void G_BuildTiccmd(ticcmd_t* cmd)
         dclicks2++;
       if (dclicks2 == 2)
         {
-          if (!dsda_DeathUseNothingInDemo())
-            cmd->buttons |= BT_USE;
+          cmd->buttons |= BT_USE;
           dclicks2 = 0;
         }
       else
@@ -1344,7 +1345,8 @@ dboolean G_Responder (event_t* ev)
 
   if (dsda_InputActivated(dsda_input_zoom))
   {
-    if (gamestate == GS_LEVEL && casual_play)
+    // Allow zoom in demoplayback
+    if (gamestate == GS_LEVEL && !demorecording)
     {
       R_ToggleZoom();
       return true;
@@ -2449,6 +2451,8 @@ void G_DoLoadGame(void)
   // CPhipps - do savegame filename stuff here
   char *name;                // killough 3/22/98
   int saveversion;
+  dboolean port_signature;
+  dboolean incompatible_save = false;
 
   dsda_SetLastLoadSlot(savegameslot);
 
@@ -2471,8 +2475,21 @@ void G_DoLoadGame(void)
   Z_Free(name);
   save_p = savebuffer + SAVESTRINGSIZE;
 
-  P_LOAD_X(saveversion);
-  if (saveversion != SAVEVERSION && !forced_loadgame) {
+  P_LOAD_SIGNATURE("NYAN", port_signature);
+
+  if (port_signature)
+  {
+    P_LOAD_X(saveversion);
+    incompatible_save = saveversion != NYAN_SAVE_VERSION;
+  }
+  else // Legacy / DSDA saves
+  {
+    P_FreeSaveBuffer();
+    M_ShowLegacySaveMessage();
+    return;
+  }
+
+  if (!forced_loadgame && incompatible_save) {
     G_LoadGameErr("Unrecognised savegame version!\nAre you sure? (y/n) ");
     return;
   }
@@ -2558,11 +2575,12 @@ static void G_DoSaveGame(dboolean via_cmd)
   name = dsda_SaveGameName(savegameslot, via_cmd);
 
   description = savedescription;
-  saveversion = SAVEVERSION;
+  saveversion = NYAN_SAVE_VERSION;
 
   P_InitSaveBuffer();
 
   P_SAVE_SIZE(description, SAVESTRINGSIZE);
+  P_SAVE_SIGNATURE("NYAN");
   P_SAVE_X(saveversion);
 
   /* killough 3/16/98, 12/98: store lump name checksum */

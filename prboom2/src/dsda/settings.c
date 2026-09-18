@@ -271,7 +271,7 @@ dboolean dsda_FadeMessages(void) {
 }
 
 dboolean dsda_WeaponCarousel(void) {
-  return dsda_IntConfig(dsda_config_weapon_carousel);
+  return !demoplayback && dsda_IntConfig(dsda_config_weapon_carousel);
 }
 
 dboolean dsda_TrackSplits(void) {
@@ -372,6 +372,29 @@ dboolean dsda_EffectPaletteReduced(void) {
   if (!casual_play || dsda_StrictMode()) return false;
 
   return dsda_IntConfig(dsda_config_palette_oneffects) > 1;
+}
+
+dboolean dsda_ApplyInvulnColormapToSky(void) {
+  dboolean options_sky = !comp[comp_skymap];
+  int config = dsda_IntConfig(dsda_config_invulnerability_sky);
+
+  if (!casual_play)
+    return options_sky;
+
+  if (config == INVULN_SKY_MBF)
+    return true;
+
+  else if (config == INVULN_SKY_VANILLA)
+    return false;
+
+  return options_sky;
+}
+
+dboolean dsda_GrayInvulnColormap(void) {
+  if (raven)
+    return false;
+
+  return dsda_IntConfig(dsda_config_gray_invulnerability);
 }
 
 dboolean dsda_ShowHealthBars(void) {
@@ -563,11 +586,32 @@ dboolean dsda_SkipWipe(void) {
     return true;
   }
 
-  return !dsda_RenderWipeScreen() || raven;
+  // Hexen doesnt have screen wipe
+  if (hexen)
+    return true;
+
+  // Heretic doesnt have screen wipe
+  // ...but allow it during demos (QOL for quickstarting)
+  if (heretic)
+  {
+    // Skip wipe when option is disabled
+    if (!dsda_IntConfig(dsda_config_allow_wipescreen_raven_demos))
+      return true;
+
+    // Skip wipe in normal play
+    if (!demorecording)
+      return true;
+  }
+
+  return !dsda_RenderWipeScreen();
 }
 
 dboolean dsda_MultipleAreaMaps(void) {
   return dsda_IntConfig(dsda_config_multiple_area_maps) && !dsda_StrictMode() && casual_play;
+}
+
+dboolean dsda_QuickArtifactUse(void) {
+  return dsda_IntConfig(dsda_config_quick_artifact_use) && !dsda_StrictMode() && casual_play;
 }
 
 dboolean dsda_SimplerPuzzleUse(void) {

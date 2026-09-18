@@ -40,14 +40,12 @@
 
 #include "textscreen/fonts/normal.h"
 
-#define PROGRESS_STEP_DURATION_MS 25
-
-static void dsda_WaitForProgressStep(unsigned int start_time)
+static void dsda_WaitForProgressStep(unsigned int start_time, unsigned int step_duration)
 {
   unsigned int elapsed;
 
-  while ((elapsed = SDL_GetTicks() - start_time) < PROGRESS_STEP_DURATION_MS)
-    I_uSleep((PROGRESS_STEP_DURATION_MS - elapsed) * 1000);
+  while ((elapsed = SDL_GetTicks() - start_time) < step_duration)
+    I_uSleep((step_duration - elapsed) * 1000);
 }
 
 //
@@ -105,16 +103,48 @@ static void GL_UpdateStartup(void);
 static void GL_RestoreStartup(void);
 static void GL_FinishStartup(void);
 
-// Skip STARTUP with key press
-static dboolean StartupSkipped(void)
+static void CheckEvents(int min_type, int max_type)
 {
   SDL_Event event;
 
+  while (SDL_PeepEvents(&event, 1, SDL_GETEVENT, min_type, max_type) > 0)
+  {
+    // Controller
+    if (event.type == SDL_CONTROLLERBUTTONDOWN)
+    {
+      switch (event.cbutton.button)
+      {
+        case SDL_CONTROLLER_BUTTON_A:
+        case SDL_CONTROLLER_BUTTON_B:
+        case SDL_CONTROLLER_BUTTON_START:
+        case SDL_CONTROLLER_BUTTON_DPAD_UP:
+        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+          startup_skipped = true;
+          break;
+
+        default:
+          break;
+      }
+    }
+
+    // Keyboard / Mouse
+    if (event.type == SDL_KEYDOWN || event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEWHEEL)
+    {
+      startup_skipped = true;
+    }
+  }
+}
+
+// Skip STARTUP with key press
+static dboolean StartupSkipped(void)
+{
   SDL_PumpEvents();
 
-  while (SDL_PeepEvents(&event, 1, SDL_GETEVENT, SDL_KEYDOWN, SDL_KEYUP) > 0)
-    if (event.type == SDL_KEYDOWN)
-      startup_skipped = true;
+  CheckEvents(SDL_KEYDOWN, SDL_KEYUP);
+  CheckEvents(SDL_MOUSEBUTTONDOWN, SDL_MOUSEWHEEL);
+  CheckEvents(SDL_CONTROLLERBUTTONDOWN, SDL_CONTROLLERBUTTONUP);
 
   return startup_skipped;
 }
@@ -125,6 +155,8 @@ static void ClearKeyPresses(void)
 {
   SDL_PumpEvents();
   SDL_FlushEvents(SDL_KEYDOWN, SDL_KEYUP);
+  SDL_FlushEvents(SDL_MOUSEBUTTONDOWN, SDL_MOUSEWHEEL);
+  SDL_FlushEvents(SDL_CONTROLLERBUTTONDOWN, SDL_CONTROLLERBUTTONUP);
 }
 
 static int HeaderHeight(void)
@@ -629,13 +661,14 @@ void dsda_HexenStartup(void)
   for (int i = 0; i < MAX_NOTCHES; ++i)
   {
     unsigned int start_time;
+    int step_duraton = 25; // 32 notches × 25 ms = 800 ms
 
     if (!startup_active || StartupSkipped())
       break;
 
     start_time = SDL_GetTicks();
     Hexen_DrawProgressNotch();
-    dsda_WaitForProgressStep(start_time);
+    dsda_WaitForProgressStep(start_time, step_duraton);
   }
 
   FinishStartup();
@@ -683,12 +716,13 @@ static void dsda_DoomStartup(void)
   for (i = 0; i < MAX_NOTCHES; ++i)
   {
     unsigned int start_time;
+    int step_duraton = 25; // 32 notches × 25 ms = 800 ms
 
     if (StartupSkipped())
       break;
 
     start_time = SDL_GetTicks();
-    dsda_WaitForProgressStep(start_time);
+    dsda_WaitForProgressStep(start_time, step_duraton);
   }
 
   FinishStartup();
@@ -756,6 +790,7 @@ void dsda_HereticStartup(void)
   {
     int offset;
     unsigned int start_time;
+    int step_duraton = 15; // 52 therm × 15 ms = 780 ms
 
     if (StartupSkipped())
       break;
@@ -765,7 +800,7 @@ void dsda_HereticStartup(void)
     screen[offset] = 0xdb;
     screen[offset + 1] = 0x2a;
     TXT_UpdateScreen();
-    dsda_WaitForProgressStep(start_time);
+    dsda_WaitForProgressStep(start_time, step_duraton);
   }
 
   TXT_Shutdown();
