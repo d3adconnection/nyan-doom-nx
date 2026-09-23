@@ -92,7 +92,7 @@ if(WITH_PORTMIDI AND NOT NINTENDO_SWITCH)
 endif()
 
 if(WITH_SPNG)
-  find_package(SPNG ${nyan_strict_keyword})
+  include(NyanSPNG)
   if(SPNG_FOUND)
     set(HAVE_LIBSPNG TRUE)
   endif()

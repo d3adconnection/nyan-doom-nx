@@ -3497,7 +3497,6 @@ static void M_DrawSetting(const setup_menu_t* s, int y)
   }
 
   if (flags & S_THERMO) {
-    dboolean selected = flags & S_HILITE;
     int value;
 
     value = dsda_IntConfig(s->config_id);
